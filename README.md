@@ -5,6 +5,7 @@
 [![CI](https://github.com/arun-skg/envdoctor/actions/workflows/ci.yml/badge.svg)](https://github.com/arun-skg/envdoctor/actions/workflows/ci.yml)
 [![node](https://img.shields.io/node/v/@arunskg/envdoctor.svg)](https://nodejs.org)
 [![license](https://img.shields.io/npm/l/@arunskg/envdoctor.svg)](./LICENSE)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
 **Local-first consistency checker for environment variables.** Detects missing, unused, duplicate, and mismatched variables across `.env` files, Docker Compose, Kubernetes manifests, GitHub Actions, and source code — no network calls, no telemetry, no values ever printed.
 
