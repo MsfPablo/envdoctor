@@ -1,0 +1,17 @@
+version: "3.8"
+services:
+  api:
+    image: example/api:latest
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-8080}
+      API_KEY: sk-secret
+    env_file:
+      - .env
+      - .env.local
+  worker:
+    image: example/worker
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - LOG_LEVEL
+      - DEBUG=1

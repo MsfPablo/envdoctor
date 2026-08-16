@@ -1,0 +1,16 @@
+services:
+  api:
+    build: .
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT}
+      DATABASE_URL: ${DATABASE_URL}
+      # Only defined here — never in any .env file
+      COMPOSE_ONLY: compose-value
+    env_file:
+      - .env
+
+  worker:
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - LOG_LEVEL

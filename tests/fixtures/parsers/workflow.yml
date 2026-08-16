@@ -1,0 +1,25 @@
+name: CI
+on:
+  push:
+    branches: [main]
+
+env:
+  CI: "true"
+  NODE_VERSION: "20"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REGION: ${{ vars.AWS_REGION }}
+        run: npm test
+      - name: Deploy
+        run: |
+          echo "deploy ${{ secrets.DEPLOY_TOKEN }}"
+          echo "home is $HOME"
