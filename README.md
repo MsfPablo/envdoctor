@@ -398,9 +398,10 @@ node dist/index.js scan --dir tests/fixtures/sample-project
 
 ## Contributing
 
-Issues and pull requests are welcome. Please run `npm test`, `npm run lint`, and
+Issues and pull requests are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md)
+for the development workflow — please run `npm test`, `npm run lint`, and
 `npm run typecheck` before opening a PR. See [CHANGELOG.md](./CHANGELOG.md) for
-release history.
+release history and [SECURITY.md](./SECURITY.md) to report a vulnerability.
 
 ## License
 
