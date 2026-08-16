@@ -1,6 +1,6 @@
-# @arun/envdoctor
+# @arun-skg/envdoctor
 
-[![CI](https://github.com/arun/envdoctor/actions/workflows/ci.yml/badge.svg)](https://github.com/arun/envdoctor/actions/workflows/ci.yml)
+[![CI](https://github.com/arun-skg/envdoctor/actions/workflows/ci.yml/badge.svg)](https://github.com/arun-skg/envdoctor/actions/workflows/ci.yml)
 
 **Local-first consistency checker for environment variables.** Detects missing, unused, duplicate, and mismatched variables across `.env` files, Docker Compose, GitHub Actions, and source code.
 
@@ -70,10 +70,10 @@
 
 ```bash
 # From npm (once published)
-npm install -g @arun/envdoctor
+npm install -g @arun-skg/envdoctor
 
 # Or run directly with npx
-npx @arun/envdoctor scan
+npx @arun-skg/envdoctor scan
 ```
 
 ## Quick Start
@@ -228,7 +228,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: npm install -g @arun/envdoctor
+      - run: npm install -g @arun-skg/envdoctor
       - run: envdoctor scan --strict
 ```
 

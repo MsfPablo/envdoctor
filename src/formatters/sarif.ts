@@ -61,7 +61,7 @@ export function formatSarif(audit: AuditResult, rootDir: string): string {
         tool: {
           driver: {
             name: "envdoctor",
-            informationUri: "https://github.com/arun/envdoctor",
+            informationUri: "https://github.com/arun-skg/envdoctor",
             rules: renderRules(),
           },
         },

@@ -1,17 +1,17 @@
 {
-  "name": "@arun/envdoctor",
+  "name": "@arun-skg/envdoctor",
   "version": "0.1.0",
   "description": "Local-first consistency checker for environment variables. Detects missing, unused, duplicate, and mismatched variables across .env files, Docker Compose, GitHub Actions, and source code.",
   "type": "module",
   "license": "MIT",
   "author": "arun",
-  "homepage": "https://github.com/arun/envdoctor#readme",
+  "homepage": "https://github.com/arun-skg/envdoctor#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/arun/envdoctor.git"
+    "url": "git+https://github.com/arun-skg/envdoctor.git"
   },
   "bugs": {
-    "url": "https://github.com/arun/envdoctor/issues"
+    "url": "https://github.com/arun-skg/envdoctor/issues"
   },
   "publishConfig": {
     "access": "public",
