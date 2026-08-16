@@ -20,6 +20,12 @@ const ALWAYS_IGNORED = [
   "**/.nuxt/**",
   "**/.venv/**",
   "**/vendor/**",
+  // System / protected directories that commonly raise EPERM/EACCES when a
+  // scan is run from a home directory. They never hold project env files.
+  "**/.Trash/**",
+  "**/Library/**",
+  "**/.cache/**",
+  "**/.npm/**",
 ];
 
 /**
@@ -49,6 +55,9 @@ export async function discoverFiles(
     onlyFiles: true,
     unique: true,
     followSymbolicLinks: false,
+    // Skip unreadable directories (e.g. macOS-protected paths) instead of
+    // aborting the whole scan with EPERM/EACCES.
+    suppressErrors: true,
     ignore: [...ALWAYS_IGNORED, ...config.ignoreFiles],
   });
 

@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2026-08-16
+
+### Fixed
+
+- `scan` no longer crashes with `EPERM`/`EACCES` when it encounters an unreadable directory (e.g. running from a home directory that contains `~/.Trash`). Unreadable paths are now skipped.
+- Ignore common system directories (`.Trash`, `Library`, `.cache`, `.npm`) during discovery.
+
 ## [0.1.0] - 2026-08-16
 
 ### Added
