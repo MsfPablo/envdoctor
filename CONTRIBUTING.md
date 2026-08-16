@@ -1,7 +1,8 @@
 # Contributing to envdoctor
 
 Thanks for your interest in improving `envdoctor`! Issues and pull requests are
-welcome.
+welcome. By participating you agree to abide by our
+[Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## Getting started
 
