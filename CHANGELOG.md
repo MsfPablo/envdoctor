@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.2] - 2026-08-16
+
+### Added
+
+- Kubernetes manifest support (`env:`, `envFrom:`, ConfigMap/Secret refs).
+- `schema-validation` detector and a generated `envdoctor.schema.ts` from `fix`.
+- `envdoctor sync <from> <to>` to copy missing keys between environment files.
+- `scan --staged` and `scan --since <ref>` to audit only git-changed files.
+
+### Changed
+
+- Comprehensive README refresh (badges, supported formats, contributing) and
+  CI examples updated to `actions@v5` / Node 22.
+
 ## [0.1.1] - 2026-08-16
 
 ### Fixed

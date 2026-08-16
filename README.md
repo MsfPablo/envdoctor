@@ -376,7 +376,7 @@ detectors (missing, undefined-in-source, unused, duplicates,
 AuditResult (Findings + Summary + ExitCode)
     │
     ▼
-generators (env-example, environment-doc, env-types, github-actions)
+generators (env-example, environment-doc, env-types, schema, github-actions)
 ```
 
 Every parser implements a common `Parser` interface and every detector a common
