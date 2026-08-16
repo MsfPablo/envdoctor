@@ -62,6 +62,9 @@
 | **duplicates** | error/warning | Same key defined twice in one file (error); same key across files sharing one environment label (warning) |
 | **environment-diff** | warning | Set-membership diffs across environments (e.g. `dev` vs `prod`) |
 | **type-mismatch** | error | Incompatible inferred types across environments, or values failing their own inferred type |
+| **public-prefix** | error | Secret-looking variable uses a public framework prefix (`NEXT_PUBLIC_*`, `VITE_*`, etc.) and will be exposed to client bundles |
+| **weak-secret** | warning | Secret-like variable has a placeholder or very short value |
+| **typo** | warning | A referenced name closely matches a defined name and may be a typo |
 
 ## Installation
 
@@ -109,9 +112,12 @@ Runs the full audit.
 |--------|-------------|
 | `-d, --dir <path>` | Project root (default: cwd) |
 | `--strict` | Treat warnings as errors (exit 1) |
-| `--json` | Machine-readable JSON output |
+| `--format <format>` | Output format: `human` (default), `json`, or `sarif` |
+| `--json` | Alias for `--format json` |
 | `--verbose` | Show file:line locations |
 | `--only <ruleId>` | Run only specific detector(s) |
+| `--baseline <path>` | Suppress findings matching a baseline file |
+| `--write-baseline <path>` | Write current findings to a baseline file |
 
 **Exit codes:** `0` = clean, `1` = errors found, `2` = usage/config error
 
@@ -121,6 +127,7 @@ Generates/updates documentation files based on the audit:
 - `.env.example` — all known variables with placeholders (secrets get empty values)
 - `ENVIRONMENT.md` — comprehensive reference table + per-environment sections
 - `.github/ENVIRONMENT.md` — checklist of `secrets.*`/`vars.*` for GitHub Actions (if applicable)
+- `env.d.ts` — TypeScript ambient declaration for `process.env` variables
 
 | Option | Description |
 |--------|-------------|
@@ -167,7 +174,26 @@ export default {
   
   // Default for --strict
   strict: false,
+
+  // Per-detector severity overrides: "error", "warning", or "off"
+  rules: {
+    // "unused": "off",
+    // "environment-diff": "error",
+  },
 };
+```
+
+### Inline ignores
+
+Suppress a detector for a specific variable with a comment on the preceding line:
+
+```env
+# envdoctor:ignore unused
+DEBUG_MODE=true
+
+# envdoctor:ignore unused, weak-secret
+MY_TOKEN=placeholder
+```
 ```
 
 ## Environment Labels

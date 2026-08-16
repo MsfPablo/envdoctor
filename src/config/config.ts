@@ -35,6 +35,11 @@ export const envdoctorConfigSchema = z.object({
   environments: z.record(z.string(), z.array(z.string())).optional(),
   /** Fail the audit when only warnings are present. */
   strict: z.boolean().default(false),
+  /**
+   * Override severity per detector. Use "off" to disable a detector entirely.
+   * Example: `{ unused: "off", "environment-diff": "warn" }`
+   */
+  rules: z.record(z.enum(["error", "warning", "off"])).default({}),
 });
 
 export type EnvdoctorConfig = z.infer<typeof envdoctorConfigSchema>;

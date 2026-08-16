@@ -61,4 +61,32 @@ describe("runAudit on the sample-project fixture", () => {
     const audit = runAudit(model, { strict: false });
     expect(audit.exitCode).toBe(EXIT_OK);
   });
+
+  it("honors inline ignore directives in env files", () => {
+    const model = buildModel([
+      { path: "/p/.env", content: "# envdoctor:ignore unused\nOLD_KEY=abc\n" },
+      { path: "/p/src/index.ts", content: "export const x = 1;\n" },
+    ]);
+    const audit = runAudit(model, { strict: false });
+    expect(audit.findings.some((f) => f.ruleId === "unused" && f.variable === "OLD_KEY")).toBe(false);
+  });
+
+  it("applies per-rule severity overrides from config", () => {
+    const model = buildModel([
+      { path: "/p/.env", content: "OLD_KEY=abc\n" },
+      { path: "/p/src/index.ts", content: "export const x = 1;\n" },
+    ]);
+    const audit = runAudit(model, { strict: false, rules: { unused: "error" } });
+    expect(audit.findings.every((f) => f.ruleId !== "unused" || f.severity === "error")).toBe(true);
+    expect(audit.exitCode).toBe(EXIT_ISSUES);
+  });
+
+  it("disables detectors configured as off", () => {
+    const model = buildModel([
+      { path: "/p/.env", content: "OLD_KEY=abc\n" },
+      { path: "/p/src/index.ts", content: "export const x = 1;\n" },
+    ]);
+    const audit = runAudit(model, { strict: false, rules: { unused: "off" } });
+    expect(audit.findings.some((f) => f.ruleId === "unused")).toBe(false);
+  });
 });

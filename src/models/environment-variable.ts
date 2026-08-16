@@ -20,6 +20,11 @@ export interface EnvironmentVariable {
   type: VariableType;
   /** Every place this name was observed. */
   origins: Origin[];
+  /**
+   * Rule ids that should be ignored for this variable, declared inline in the
+   * env file via `# envdoctor:ignore <rule>` comments.
+   */
+  ignoreRules?: string[];
 }
 
 /** Convenience helpers for building and reading variables. */
@@ -33,6 +38,7 @@ export function createVariable(
   name: string,
   value: string | undefined,
   origins: Origin[],
+  ignoreRules?: string[],
 ): EnvironmentVariable {
   return {
     name,
@@ -40,6 +46,7 @@ export function createVariable(
     isSecret: isSecretName(name),
     type: inferType(value),
     origins,
+    ignoreRules,
   };
 }
 

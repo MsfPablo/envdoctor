@@ -45,17 +45,28 @@ export async function main(argv: string[]): Promise<void> {
     .description("Scan the project for environment variable inconsistencies.")
     .option("-d, --dir <path>", "Project directory (default: current directory)")
     .option("--strict", "Treat warnings as failures")
-    .option("--json", "Emit machine-readable JSON to stdout")
+    .option("--format <format>", "Output format: human, json, or sarif", "human")
+    .option("--json", "Alias for --format json")
     .option("--only <rules>", "Comma-separated detector ids to run", parseRules, [])
     .option("-v, --verbose", "Show file:line locations in the report")
+    .option("--baseline <path>", "Suppress findings matching a baseline file")
+    .option("--write-baseline <path>", "Write current findings to a baseline file")
     .action(async (opts) => {
       const rootDir = resolveRootDir(opts.dir);
+      const format = opts.json ? "json" : opts.format;
+      if (!["human", "json", "sarif"].includes(format)) {
+        process.stderr.write(ui.error(`error: unknown format "${format}"\n`));
+        process.exitCode = EXIT_USAGE;
+        return;
+      }
       process.exitCode = await runScan({
         rootDir,
         strict: Boolean(opts.strict),
-        json: Boolean(opts.json),
+        format,
         verbose: Boolean(opts.verbose),
         only: opts.only,
+        baseline: opts.baseline,
+        writeBaseline: opts.writeBaseline,
       });
     });
 

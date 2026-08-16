@@ -18,6 +18,12 @@ interface EnvEntry {
   key: string;
   value: string | undefined;
   line: number;
+  ignoreRules?: string[];
+}
+
+interface IgnoreDirective {
+  line: number;
+  rules: string[];
 }
 
 /** The environment label derived from a dotenv filename. */
@@ -159,6 +165,54 @@ export function parseDotenv(content: string): EnvEntry[] {
   return entries;
 }
 
+/**
+ * Parse inline ignore directives placed on the line before a variable
+ * definition:
+ *
+ *   # envdoctor:ignore unused
+ *   DEBUG_MODE=true
+ *
+ * Multiple rules can be comma- or space-separated:
+ *
+ *   # envdoctor:ignore unused, weak-secret
+ *   MY_TOKEN=placeholder
+ */
+function parseIgnoreDirectives(content: string): IgnoreDirective[] {
+  const directives: IgnoreDirective[] = [];
+  const lines = content.split("\n");
+  const re = /^#\s*envdoctor:ignore\s+([a-z0-9_,\-\s]+)\s*$/i;
+  for (let i = 0; i < lines.length; i++) {
+    const match = re.exec(lines[i]!);
+    if (!match) continue;
+    const rules = match[1]!
+      .split(/[,\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (rules.length > 0) directives.push({ line: i + 1, rules });
+  }
+  return directives;
+}
+
+/** Attach pending ignore directives to the first entry that appears after them. */
+function applyIgnoreDirectives(entries: EnvEntry[], directives: IgnoreDirective[]): void {
+  const entryByLine = new Map(entries.map((e) => [e.line, e]));
+  const pending: string[] = [];
+  const lines = Math.max(
+    1,
+    ...entries.map((e) => e.line),
+    ...directives.map((d) => d.line),
+  );
+  for (let line = 1; line <= lines; line++) {
+    const directive = directives.find((d) => d.line === line);
+    if (directive) pending.push(...directive.rules);
+    const entry = entryByLine.get(line);
+    if (entry && pending.length > 0) {
+      entry.ignoreRules = [...(entry.ignoreRules ?? []), ...pending];
+      pending.length = 0;
+    }
+  }
+}
+
 export const envParser: Parser = {
   id: "dotenv",
   match(filePath) {
@@ -167,8 +221,10 @@ export const envParser: Parser = {
   },
   parse(content, filePath) {
     const environment = environmentLabelForDotenv(filePath);
+    const entries = parseDotenv(content);
+    applyIgnoreDirectives(entries, parseIgnoreDirectives(content));
     const variables: EnvironmentVariable[] = [];
-    for (const entry of parseDotenv(content)) {
+    for (const entry of entries) {
       const origin: Origin = {
         filePath,
         line: entry.line,
@@ -176,7 +232,7 @@ export const envParser: Parser = {
         environment,
         format: "dotenv",
       };
-      variables.push(createVariable(entry.key, entry.value, [origin]));
+      variables.push(createVariable(entry.key, entry.value, [origin], entry.ignoreRules));
     }
     const result: EnvironmentFile = {
       filePath,

@@ -86,4 +86,14 @@ describe("envParser", () => {
     expect(byName.get("API_KEY")?.isSecret).toBe(true);
     expect(byName.get("DATABASE_URL")?.isSecret).toBe(false);
   });
+
+  it("captures inline ignore directives on the preceding line", () => {
+    const file = envParser.parse(
+      "# envdoctor:ignore unused\nDEBUG_MODE=true\n# envdoctor:ignore unused, weak-secret\nAPI_KEY=short\n",
+      "/proj/.env",
+    );
+    const byName = new Map(file.variables.map((v) => [v.name, v]));
+    expect(byName.get("DEBUG_MODE")?.ignoreRules).toEqual(["unused"]);
+    expect(byName.get("API_KEY")?.ignoreRules).toEqual(["unused", "weak-secret"]);
+  });
 });

@@ -7,6 +7,9 @@ import { typeMismatchDetector } from "./type-mismatch.js";
 import { undefinedSourceDetector } from "./undefined-source.js";
 import { unusedDetector } from "./unused.js";
 import type { Definition, Detector, IndexedModel } from "./detector.js";
+import { publicPrefixDetector } from "./public-prefix.js";
+import { typoDetector } from "./typo.js";
+import { weakSecretDetector } from "./weak-secret.js";
 
 /**
  * All detectors, in a stable order. The audit engine runs them in this order
@@ -19,6 +22,9 @@ export const DETECTORS: readonly Detector[] = [
   duplicatesDetector,
   environmentDiffDetector,
   typeMismatchDetector,
+  publicPrefixDetector,
+  weakSecretDetector,
+  typoDetector,
 ];
 
 export type { Detector, IndexedModel } from "./detector.js";

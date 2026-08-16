@@ -116,6 +116,32 @@ const SECTION_SPECS: SectionSpec[] = [
     ruleIds: ["environment-diff"],
     line: (f) => [`  ${f.message}`],
   },
+  {
+    heading: "Public secret leak",
+    severity: "error",
+    ruleIds: ["public-prefix"],
+    line: (f, rootDir, verbose) => {
+      const lines = [`  ${f.variable}`];
+      lines.push(...locationLines(f, rootDir, verbose));
+      return lines;
+    },
+  },
+  {
+    heading: "Weak secrets",
+    severity: "warning",
+    ruleIds: ["weak-secret"],
+    line: (f) => [`  ${f.variable}  ${ui.dim(f.message)}`],
+  },
+  {
+    heading: "Possible typos",
+    severity: "warning",
+    ruleIds: ["typo"],
+    line: (f, rootDir, verbose) => {
+      const lines = [`  ${f.variable}  ${ui.dim(f.message)}`];
+      lines.push(...locationLines(f, rootDir, verbose));
+      return lines;
+    },
+  },
 ];
 
 /**

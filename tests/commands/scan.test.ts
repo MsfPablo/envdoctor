@@ -17,7 +17,7 @@ describe("envdoctor scan", () => {
   });
 
   it("reports issues on the sample project with a non-zero exit code", async () => {
-    const result = await capture(() => runScan({ rootDir: tmpDir, strict: false, json: false, verbose: false, only: [] }));
+    const result = await capture(() => runScan({ rootDir: tmpDir, strict: false, format: "human", verbose: false, only: [] }));
     expect(result.code).toBe(EXIT_ISSUES);
     expect(result.stdout).toContain("ENVIRONMENT AUDIT");
     expect(result.stdout).toContain("Missing");
@@ -30,7 +30,7 @@ describe("envdoctor scan", () => {
   });
 
   it("emits JSON that contains no values", async () => {
-    const result = await capture(() => runScan({ rootDir: tmpDir, strict: false, json: true, verbose: false, only: [] }));
+    const result = await capture(() => runScan({ rootDir: tmpDir, strict: false, format: "json", verbose: false, only: [] }));
     const parsed = JSON.parse(result.stdout);
     expect(parsed.exitCode).toBe(EXIT_ISSUES);
     expect(parsed.summary.errors).toBeGreaterThan(0);
@@ -48,15 +48,51 @@ describe("envdoctor scan", () => {
     fs.writeFileSync(path.join(clean, ".env"), "OLD_KEY=abc\n");
     fs.writeFileSync(path.join(clean, "src", "index.ts"), "export const x = 1;\n");
 
-    const lax = await capture(() => runScan({ rootDir: clean, strict: false, json: false, verbose: false, only: [] }));
+    const lax = await capture(() => runScan({ rootDir: clean, strict: false, format: "human", verbose: false, only: [] }));
     expect(lax.code).toBe(EXIT_OK);
 
-    const strict = await capture(() => runScan({ rootDir: clean, strict: true, json: false, verbose: false, only: [] }));
+    const strict = await capture(() => runScan({ rootDir: clean, strict: true, format: "human", verbose: false, only: [] }));
     expect(strict.code).toBe(EXIT_ISSUES);
   });
 
   it("renders verbose locations when requested", async () => {
-    const result = await capture(() => runScan({ rootDir: tmpDir, strict: false, json: false, verbose: true, only: [] }));
+    const result = await capture(() => runScan({ rootDir: tmpDir, strict: false, format: "human", verbose: true, only: [] }));
     expect(result.stdout).toContain("src/index.ts:");
+  });
+
+  it("writes and uses a baseline file", async () => {
+    const clean = path.join(tmpDir, "baseline-project");
+    fs.mkdirSync(path.join(clean, "src"), { recursive: true });
+    fs.writeFileSync(path.join(clean, ".env"), "OLD_KEY=abc\n");
+    fs.writeFileSync(path.join(clean, "src", "index.ts"), "export const x = 1;\n");
+
+    const first = await capture(() =>
+      runScan({ rootDir: clean, strict: true, format: "human", verbose: false, only: [] }),
+    );
+    expect(first.code).toBe(EXIT_ISSUES);
+
+    await capture(() =>
+      runScan({
+        rootDir: clean,
+        strict: true,
+        format: "human",
+        verbose: false,
+        only: [],
+        writeBaseline: ".envdoctor-baseline.json",
+      }),
+    );
+    expect(fs.existsSync(path.join(clean, ".envdoctor-baseline.json"))).toBe(true);
+
+    const second = await capture(() =>
+      runScan({
+        rootDir: clean,
+        strict: true,
+        format: "human",
+        verbose: false,
+        only: [],
+        baseline: ".envdoctor-baseline.json",
+      }),
+    );
+    expect(second.code).toBe(EXIT_OK);
   });
 });

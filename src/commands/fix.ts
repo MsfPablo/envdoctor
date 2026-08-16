@@ -3,6 +3,7 @@ import path from "node:path";
 import { runAudit } from "../core/audit.js";
 import { loadProject } from "../core/pipeline.js";
 import { generateEnvExample } from "../generators/env-example.js";
+import { generateEnvTypes } from "../generators/env-types.js";
 import { generateEnvironmentDoc } from "../generators/environment-doc.js";
 import {
   collectActionsChecklist,
@@ -31,7 +32,7 @@ interface PlannedFile {
  */
 export async function runFix(opts: FixOptions): Promise<number> {
   const context = await loadProject(opts.rootDir);
-  const audit = runAudit(context.model, { strict: false });
+  const audit = runAudit(context.model, { strict: false, rules: context.config.rules });
 
   const checklist = collectActionsChecklist(context.model);
   const hasActionsRefs = checklist.secrets.length > 0 || checklist.vars.length > 0;
@@ -39,6 +40,7 @@ export async function runFix(opts: FixOptions): Promise<number> {
   const plans: PlannedFile[] = [
     plan(".env.example", generateEnvExample(context.model), opts),
     plan("ENVIRONMENT.md", generateEnvironmentDoc(context.model), opts),
+    plan("env.d.ts", generateEnvTypes(context.model), opts),
   ];
   if (hasActionsRefs) {
     plans.push(plan(path.join(".github", "ENVIRONMENT.md"), generateActionsChecklist(context.model), opts));

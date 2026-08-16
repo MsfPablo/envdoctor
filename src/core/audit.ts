@@ -1,6 +1,6 @@
 import { DETECTORS, buildIndex } from "../detectors/index.js";
 import type { Detector } from "../detectors/detector.js";
-import type { AuditResult, AuditSummary } from "../models/audit-result.js";
+import type { AuditResult, AuditSummary, Finding } from "../models/audit-result.js";
 import type { ProjectModel } from "../models/project-model.js";
 import { auditExitCode } from "./exit-codes.js";
 
@@ -8,6 +8,8 @@ export interface AuditOptions {
   strict: boolean;
   /** Restrict the audit to specific detector ids (e.g. `--only missing`). */
   only?: readonly string[];
+  /** Per-detector severity overrides. */
+  rules?: Record<string, "error" | "warning" | "off">;
 }
 
 /**
@@ -23,7 +25,10 @@ export function runAudit(model: ProjectModel, options: AuditOptions): AuditResul
       ? DETECTORS.filter((d) => options.only!.includes(d.id))
       : DETECTORS;
 
-  const findings = detectors.flatMap((d) => d.detect(index));
+  let findings = detectors.flatMap((d) => d.detect(index));
+
+  findings = applyIgnores(findings, model);
+  findings = applyRuleSeverities(findings, options.rules ?? {});
 
   const summary: AuditSummary = {
     filesScanned: model.allFiles.length,
@@ -37,6 +42,48 @@ export function runAudit(model: ProjectModel, options: AuditOptions): AuditResul
   const exitCode = auditExitCode({ findings, strict: options.strict });
 
   return { findings, summary, exitCode };
+}
+
+/** Build a map of variable name → set of ignored rule ids from inline comments. */
+function buildIgnoredRulesByName(model: ProjectModel): Map<string, Set<string>> {
+  const ignored = new Map<string, Set<string>>();
+  for (const file of model.envFiles) {
+    if (file.environment === "example") continue;
+    for (const v of file.variables) {
+      if (!v.ignoreRules || v.ignoreRules.length === 0) continue;
+      const set = ignored.get(v.name) ?? new Set<string>();
+      for (const rule of v.ignoreRules) set.add(rule);
+      ignored.set(v.name, set);
+    }
+  }
+  return ignored;
+}
+
+/** Drop findings that are ignored inline in env files. */
+function applyIgnores(
+  findings: Finding[],
+  model: ProjectModel,
+): Finding[] {
+  const ignored = buildIgnoredRulesByName(model);
+  return findings.filter((f) => {
+    const rules = ignored.get(f.variable);
+    return !(rules && rules.has(f.ruleId));
+  });
+}
+
+/** Apply per-detector severity overrides from config. Disabled rules are dropped. */
+function applyRuleSeverities(
+  findings: Finding[],
+  rules: Record<string, "error" | "warning" | "off">,
+): Finding[] {
+  const result: Finding[] = [];
+  for (const f of findings) {
+    const override = rules[f.ruleId];
+    if (override === "off") continue;
+    if (override) result.push({ ...f, severity: override });
+    else result.push(f);
+  }
+  return result;
 }
 
 function distinctVariableCount(model: ProjectModel): number {
