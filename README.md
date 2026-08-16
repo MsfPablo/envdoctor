@@ -1,4 +1,4 @@
-# @arun-skg/envdoctor
+# @arunskg/envdoctor
 
 [![CI](https://github.com/arun-skg/envdoctor/actions/workflows/ci.yml/badge.svg)](https://github.com/arun-skg/envdoctor/actions/workflows/ci.yml)
 
@@ -70,10 +70,10 @@
 
 ```bash
 # From npm (once published)
-npm install -g @arun-skg/envdoctor
+npm install -g @arunskg/envdoctor
 
 # Or run directly with npx
-npx @arun-skg/envdoctor scan
+npx @arunskg/envdoctor scan
 ```
 
 ## Quick Start
@@ -228,7 +228,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: npm install -g @arun-skg/envdoctor
+      - run: npm install -g @arunskg/envdoctor
       - run: envdoctor scan --strict
 ```
 

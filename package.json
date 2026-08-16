@@ -1,5 +1,5 @@
 {
-  "name": "@arun-skg/envdoctor",
+  "name": "@arunskg/envdoctor",
   "version": "0.1.0",
   "description": "Local-first consistency checker for environment variables. Detects missing, unused, duplicate, and mismatched variables across .env files, Docker Compose, GitHub Actions, and source code.",
   "type": "module",
