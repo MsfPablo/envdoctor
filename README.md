@@ -1,8 +1,12 @@
 # @arunskg/envdoctor
 
+[![npm version](https://img.shields.io/npm/v/@arunskg/envdoctor.svg)](https://www.npmjs.com/package/@arunskg/envdoctor)
+[![npm downloads](https://img.shields.io/npm/dm/@arunskg/envdoctor.svg)](https://www.npmjs.com/package/@arunskg/envdoctor)
 [![CI](https://github.com/arun-skg/envdoctor/actions/workflows/ci.yml/badge.svg)](https://github.com/arun-skg/envdoctor/actions/workflows/ci.yml)
+[![node](https://img.shields.io/node/v/@arunskg/envdoctor.svg)](https://nodejs.org)
+[![license](https://img.shields.io/npm/l/@arunskg/envdoctor.svg)](./LICENSE)
 
-**Local-first consistency checker for environment variables.** Detects missing, unused, duplicate, and mismatched variables across `.env` files, Docker Compose, GitHub Actions, and source code.
+**Local-first consistency checker for environment variables.** Detects missing, unused, duplicate, and mismatched variables across `.env` files, Docker Compose, Kubernetes manifests, GitHub Actions, and source code — no network calls, no telemetry, no values ever printed.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -13,10 +17,6 @@
 │  ─────────────────────────────────────────────────────────────  │
 │  ❌  COMPOSE_ONLY       docker-compose.yml:9   referenced but   │
 │                          not defined in any environment file   │
-│  ❌  DATABASE_URL       docker-compose.yml:7   referenced but   │
-│                          not defined in any environment file   │
-│  ❌  REDIS_URL          docker-compose.yml:15  referenced but   │
-│                          not defined in any environment file   │
 │  ❌  NEW_FEATURE_FLAG   src/index.ts:5         used in source   │
 │                          code but not defined in any           │
 │                          environment file                      │
@@ -25,46 +25,58 @@
 │  ─────────────────────────────────────────────────────────────  │
 │  ⚠  DEBUG_MODE          .env:7               defined but never │
 │                          referenced anywhere                    │
-│  ⚠  OLD_API_KEY         .env:9               defined but never │
-│                          referenced anywhere                    │
-│  ⚠  LOCAL_ONLY          .env.local:3         defined but never │
-│                          referenced anywhere                    │
-│  ⚠  JWT_SECRET          .env.production:7    defined but never │
-│                          referenced anywhere                    │
 │                                                                 │
 │  Duplicates (error)                                             │
 │  ─────────────────────────────────────────────────────────────  │
 │  ❌  NODE_ENV            .env:2,12           defined 2 times   │
-│                          on lines 2, 12                         │
 │                                                                 │
 │  Type mismatch (error)                                          │
 │  ─────────────────────────────────────────────────────────────  │
-│  ❌  PORT                expected: integer                      │
-│                          found: string                          │
+│  ❌  PORT                expected: integer · found: string      │
 │                                                                 │
-│  Environment differences                                        │
-│  ─────────────────────────────────────────────────────────────  │
-│  development → local · API_KEY missing in local                │
-│  development → local · DATABASE_URL missing in local           │
-│  development → production · JWT_SECRET missing in development  │
-│                                                                 │
-│  Summary: 8 files scanned · 15 variables · 3 errors · 16 warns │
+│  Summary: 8 files scanned · 15 variables · 4 errors · 16 warns │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Features
+## Contents
 
-| Detector | Severity | What it catches |
-|----------|----------|-----------------|
-| **missing** | error | Variables referenced in docker-compose (definitions + `${VAR}` interpolation), GitHub Actions, or `.env.example` but not defined in any `.env` file |
-| **unused** | warning | Variables defined in `.env` files but never referenced in source, compose, or actions |
-| **undefined-in-source** | error | `process.env.X` / `import.meta.env.X` in source code with no definition in any `.env` file and not in `.env.example` |
-| **duplicates** | error/warning | Same key defined twice in one file (error); same key across files sharing one environment label (warning) |
-| **environment-diff** | warning | Set-membership diffs across environments (e.g. `dev` vs `prod`) |
-| **type-mismatch** | error | Incompatible inferred types across environments, or values failing their own inferred type |
-| **public-prefix** | error | Secret-looking variable uses a public framework prefix (`NEXT_PUBLIC_*`, `VITE_*`, etc.) and will be exposed to client bundles |
-| **weak-secret** | warning | Secret-like variable has a placeholder or very short value |
-| **typo** | warning | A referenced name closely matches a defined name and may be a typo |
+- [Why](#why)
+- [Supported formats](#supported-formats)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Detectors](#detectors)
+- [Commands](#commands)
+- [Configuration](#configuration)
+- [Environment labels](#environment-labels)
+- [Output formats](#output-formats)
+- [CI integration](#ci-integration)
+- [Security](#security)
+- [Architecture](#architecture)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Why
+
+Environment drift is a silent class of bug: a variable is used in code but never
+documented, defined in `.env` but dead, present in `development` but forgotten in
+`production`, or a secret accidentally shipped to the client bundle behind a
+`NEXT_PUBLIC_` prefix. `envdoctor` reconciles every place a variable can appear —
+`.env` files, Docker Compose, Kubernetes manifests, GitHub Actions, and your
+source code — into one normalized model, then runs a suite of detectors over it.
+
+It is **local-first**: everything runs on your machine, nothing is uploaded, and
+variable *values* are never printed or written into generated artifacts.
+
+## Supported formats
+
+| Source | What is read |
+|--------|--------------|
+| dotenv | `.env`, `.env.local`, `.env.production`, `.env.*` |
+| Docker Compose | `environment:` keys and `${VAR}` interpolation |
+| Kubernetes | `env:`, `envFrom:`, ConfigMap/Secret manifests |
+| GitHub Actions | workflow `env:`, `secrets.*`, `vars.*` |
+| Source code | `process.env.X` / `import.meta.env.X` (`.ts/.tsx/.js/.jsx/.mjs/.cjs`) |
 
 ## Installation
 
@@ -81,7 +93,7 @@ npx @arunskg/envdoctor scan
 > `envdoctor` bin isn't on your PATH, and you'll see `envdoctor: command not
 > found`. After a global install, the short `envdoctor` command works anywhere.
 
-## Quick Start
+## Quick start
 
 ```bash
 # Bootstrap config + .env.example + ENVIRONMENT.md in your project
@@ -97,6 +109,24 @@ envdoctor diff development production
 envdoctor fix --dry-run
 envdoctor fix
 ```
+
+## Detectors
+
+| Detector | Severity | What it catches |
+|----------|----------|-----------------|
+| **missing** | error | Variables referenced in Docker Compose (definitions + `${VAR}` interpolation), Kubernetes, GitHub Actions, or `.env.example` but not defined in any `.env` file |
+| **undefined-in-source** | error | `process.env.X` / `import.meta.env.X` in source code with no definition in any `.env` file and not in `.env.example` |
+| **unused** | warning | Variables defined in `.env` files but never referenced in source, compose, k8s, or actions |
+| **duplicates** | error/warning | Same key defined twice in one file (error); same key across files sharing one environment label (warning) |
+| **environment-diff** | warning | Set-membership diffs across environments (e.g. `dev` vs `prod`) |
+| **type-mismatch** | error | Incompatible inferred types across environments, or values failing their own inferred type |
+| **schema-validation** | error | A value does not match its declared `schema` rule in the config |
+| **public-prefix** | error | Secret-looking variable uses a public framework prefix (`NEXT_PUBLIC_*`, `VITE_*`, etc.) and would be exposed to client bundles |
+| **weak-secret** | warning | Secret-like variable has a placeholder or very short value |
+| **typo** | warning | A referenced name closely matches a defined name and may be a typo |
+
+Any detector can be downgraded or disabled via the [`rules`](#configuration)
+config or an [inline ignore](#inline-ignores).
 
 ## Commands
 
@@ -120,17 +150,20 @@ Runs the full audit.
 | `--format <format>` | Output format: `human` (default), `json`, or `sarif` |
 | `--json` | Alias for `--format json` |
 | `--verbose` | Show file:line locations |
-| `--only <ruleId>` | Run only specific detector(s) |
-| `--baseline <path>` | Suppress findings matching a baseline file |
+| `--only <ruleId>` | Run only specific detector(s), comma-separated |
+| `--baseline <path>` | Suppress findings listed in a baseline file |
 | `--write-baseline <path>` | Write current findings to a baseline file |
 
 **Exit codes:** `0` = clean, `1` = errors found, `2` = usage/config error
 
+The `--baseline` / `--write-baseline` pair lets you adopt `envdoctor` on a legacy
+project: snapshot today's findings, then fail CI only on *new* ones.
+
 ### `envdoctor fix [options]`
 
-Generates/updates documentation files based on the audit:
+Generates/updates safe artifacts based on the audit:
 - `.env.example` — all known variables with placeholders (secrets get empty values)
-- `ENVIRONMENT.md` — comprehensive reference table + per-environment sections
+- `ENVIRONMENT.md` — reference table + per-environment sections
 - `.github/ENVIRONMENT.md` — checklist of `secrets.*`/`vars.*` for GitHub Actions (if applicable)
 - `env.d.ts` — TypeScript ambient declaration for `process.env` variables
 
@@ -142,48 +175,56 @@ Generates/updates documentation files based on the audit:
 ### `envdoctor diff <env1> <env2> [--json]`
 
 Focused comparison between two environments (e.g. `dev prod`, `development production`).
-
 Shows per-variable status: `✓ same`, `⚠ different`, `❌ missing`.
 
 ## Configuration
 
-Create `envdoctor.config.ts` (or `.js`/`mjs`, or `package.json#envdoctor`):
+Configuration is optional — defaults are sensible for most projects. Create
+`envdoctor.config.ts` (or `.js`/`.mjs`/`.cjs`, or an `envdoctor` key in
+`package.json`):
 
 ```ts
 export default {
-  // Files considered as environment files (glob patterns)
+  // Glob patterns for dotenv files
   envFilePatterns: [".env", ".env.*"],
-  
+
   // Docker Compose file patterns
-  composeFiles: [
-    "docker-compose.yml",
-    "docker-compose.yaml",
-    "compose.yaml",
-    "compose.yml"
-  ],
-  
+  composeFilePatterns: ["**/docker-compose*.y*ml", "**/compose*.y*ml"],
+
+  // GitHub Actions workflow patterns
+  actionsFilePatterns: [".github/workflows/**/*.y*ml"],
+
+  // Kubernetes manifest patterns
+  k8sFilePatterns: ["**/k8s/**/*.y*ml", "**/manifests/**/*.y*ml"],
+
   // Source file extensions to scan
   sourceExtensions: ["ts", "tsx", "js", "jsx", "mjs", "cjs"],
-  
-  // Variable names to ignore entirely (glob patterns)
+
+  // Variable names to ignore entirely (glob patterns, e.g. "AWS_*")
   ignoreVariables: [],
-  
-  // File paths to ignore
+
+  // File paths to ignore (glob patterns)
   ignoreFiles: [],
-  
+
   // Explicit environment label → file list overrides
   environments: {
     // development: [".env", ".env.local"],
     // production: [".env.production"],
   },
-  
-  // Default for --strict
+
+  // Fail the audit when only warnings are present
   strict: false,
 
   // Per-detector severity overrides: "error", "warning", or "off"
   rules: {
-    // "unused": "off",
+    // unused: "off",
     // "environment-diff": "error",
+  },
+
+  // Per-variable value validation (feeds the schema-validation detector)
+  schema: {
+    // PORT: { type: "integer" },
+    // NODE_ENV: { enum: ["development", "production", "test"] },
   },
 };
 ```
@@ -199,9 +240,8 @@ DEBUG_MODE=true
 # envdoctor:ignore unused, weak-secret
 MY_TOKEN=placeholder
 ```
-```
 
-## Environment Labels
+## Environment labels
 
 | File | Label |
 |------|-------|
@@ -213,36 +253,12 @@ MY_TOKEN=placeholder
 
 Aliases: `dev` → `development`, `prod` → `production` for the `diff` command.
 
-## Security
-
-- **Values are never printed** to stdout/stderr (even with `--verbose`)
-- **Secrets are never written** to generated files (`.env.example`, `ENVIRONMENT.md`, `.github/ENVIRONMENT.md`)
-- Secret heuristic: name matches `/(SECRET|TOKEN|PASSWORD|PASS|API[_A-Z]*KEY|PRIVATE[_-]?KEY|CREDENTIALS)/i`
-
-## GitHub Actions Integration
-
-```yaml
-# .github/workflows/env-audit.yml
-name: Environment Audit
-on: [push, pull_request]
-jobs:
-  envdoctor:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - run: npm install -g @arunskg/envdoctor
-      - run: envdoctor scan --strict
-```
-
-## Output Formats
+## Output formats
 
 ### Human (default)
 Colorized, sectioned report as shown above.
 
-### JSON (`--json`)
+### JSON (`--json` / `--format json`)
 ```json
 {
   "exitCode": 1,
@@ -269,13 +285,45 @@ Colorized, sectioned report as shown above.
 }
 ```
 
+### SARIF (`--format sarif`)
+Emits [SARIF 2.1.0](https://sarifweb.azurewebsites.net/) for upload to GitHub
+code scanning or any SARIF-aware tool.
+
+## CI integration
+
+```yaml
+# .github/workflows/env-audit.yml
+name: Environment Audit
+on: [push, pull_request]
+jobs:
+  envdoctor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - run: npx @arunskg/envdoctor scan --strict
+```
+
+For code scanning, add `--format sarif` and upload the result with
+`github/codeql-action/upload-sarif`.
+
+## Security
+
+- **Values are never printed** to stdout/stderr (even with `--verbose`).
+- **Secrets are never written** to generated files (`.env.example`, `ENVIRONMENT.md`, `.github/ENVIRONMENT.md`, `env.d.ts`).
+- **No network calls, no telemetry** — everything runs locally.
+- Secret heuristic: name matches `/(SECRET|TOKEN|PASSWORD|PASS|API[_A-Z]*KEY|PRIVATE[_-]?KEY|CREDENTIALS)/i`.
+- Unreadable directories are skipped rather than aborting the scan.
+
 ## Architecture
 
 ```
 discovery (fast-glob)
     │
     ▼
-parsers (dotenv, docker-compose, github-actions, source)
+parsers (dotenv, docker-compose, kubernetes, github-actions, source)
     │
     ▼
 normalized ProjectModel (definitions + usages per file)
@@ -284,39 +332,40 @@ normalized ProjectModel (definitions + usages per file)
 index (buildIndex: maps by name + environment)
     │
     ▼
-detectors (missing, unused, undefined-in-source, duplicates, environment-diff, type-mismatch)
+detectors (missing, undefined-in-source, unused, duplicates,
+           environment-diff, type-mismatch, schema-validation,
+           public-prefix, weak-secret, typo)
     │
     ▼
 AuditResult (Findings + Summary + ExitCode)
     │
     ▼
-generators (env-example, environment-doc, github-actions)
+generators (env-example, environment-doc, env-types, github-actions)
 ```
 
-All parsers implement a common `Parser` interface — new formats can be added without changing detectors or generators.
+Every parser implements a common `Parser` interface and every detector a common
+`Detector` interface — new formats and rules can be added without touching the
+others.
 
 ## Development
 
 ```bash
-# Install deps
-npm install
-
-# Run tests
-npm test
-
-# Typecheck
-npm run typecheck
-
-# Lint
-npm run lint
-
-# Build
-npm run build
+npm install       # install deps
+npm test          # run the test suite (vitest)
+npm run typecheck # tsc --noEmit
+npm run lint      # eslint
+npm run build     # tsup → dist/
 
 # Local smoke test
 node dist/index.js scan --dir tests/fixtures/sample-project
 ```
 
+## Contributing
+
+Issues and pull requests are welcome. Please run `npm test`, `npm run lint`, and
+`npm run typecheck` before opening a PR. See [CHANGELOG.md](./CHANGELOG.md) for
+release history.
+
 ## License
 
-MIT
+[MIT](./LICENSE)
