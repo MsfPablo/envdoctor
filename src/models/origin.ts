@@ -23,7 +23,7 @@ export interface Origin {
   /** Environment label (dotenv files only, e.g. "development", "production"). */
   environment?: string;
   /** The format the origin came from. */
-  format?: "dotenv" | "docker-compose" | "github-actions" | "source";
+  format?: "dotenv" | "docker-compose" | "github-actions" | "kubernetes" | "source";
   /** Format-specific detail (e.g. "secrets" vs "vars" for GitHub Actions). */
   subkind?: string;
 }

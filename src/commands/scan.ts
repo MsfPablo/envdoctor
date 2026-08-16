@@ -4,6 +4,7 @@ import { DETECTORS } from "../detectors/index.js";
 import { runAudit } from "../core/audit.js";
 import { loadProject } from "../core/pipeline.js";
 import { formatSarif } from "../formatters/sarif.js";
+import { hasNoGitChanges, type GitFilter } from "../utils/git.js";
 import { renderReport, ui } from "../utils/logger.js";
 import { displayPath } from "../utils/paths.js";
 import { originToJson, reportParseErrors } from "./shared.js";
@@ -23,6 +24,8 @@ export interface ScanOptions {
   baseline?: string;
   /** Path to write a new baseline from the current findings. */
   writeBaseline?: string;
+  /** Restrict scanning to files changed in git. */
+  gitFilter?: GitFilter;
 }
 
 /** `envdoctor scan` — discover, parse, audit, and report. */
@@ -36,7 +39,12 @@ export async function runScan(opts: ScanOptions): Promise<number> {
     }
   }
 
-  const context = await loadProject(opts.rootDir);
+  if (opts.gitFilter && hasNoGitChanges(opts.rootDir, opts.gitFilter)) {
+    process.stdout.write(`${ui.success("✓")} ${ui.dim("No changed env-related files to scan")}\n`);
+    return 0;
+  }
+
+  const context = await loadProject(opts.rootDir, { gitFilter: opts.gitFilter });
   let audit = runAudit(context.model, {
     strict: opts.strict,
     only: opts.only,

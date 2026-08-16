@@ -20,6 +20,16 @@ export const envdoctorConfigSchema = z.object({
   actionsFilePatterns: z
     .array(z.string())
     .default([".github/workflows/**/*.y*ml"]),
+  /** Glob patterns for Kubernetes manifests. */
+  k8sFilePatterns: z
+    .array(z.string())
+    .default([
+      "**/*.{deployment,service,statefulset,daemonset,cronjob,job,configmap,secret,ingress,pvc}.y*ml",
+      "**/k8s/**/*.y*ml",
+      "**/kubernetes/**/*.y*ml",
+      "**/manifests/**/*.y*ml",
+      "**/deploy/**/*.y*ml",
+    ]),
   /** File extensions scanned for source usage. */
   sourceExtensions: z
     .array(z.string())
@@ -40,6 +50,24 @@ export const envdoctorConfigSchema = z.object({
    * Example: `{ unused: "off", "environment-diff": "warn" }`
    */
   rules: z.record(z.enum(["error", "warning", "off"])).default({}),
+  /**
+   * Per-variable validation schema. Values in env files are checked against
+   * these rules.
+   */
+  schema: z
+    .record(
+      z.object({
+        type: z
+          .enum(["string", "integer", "float", "boolean", "url", "json", "enum", "regex"])
+          .optional(),
+        optional: z.boolean().optional(),
+        enum: z.array(z.string()).optional(),
+        regex: z.string().optional(),
+        min: z.number().optional(),
+        max: z.number().optional(),
+      }),
+    )
+    .default({}),
 });
 
 export type EnvdoctorConfig = z.infer<typeof envdoctorConfigSchema>;

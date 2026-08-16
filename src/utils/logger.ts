@@ -142,6 +142,16 @@ const SECTION_SPECS: SectionSpec[] = [
       return lines;
     },
   },
+  {
+    heading: "Schema validation",
+    severity: "error",
+    ruleIds: ["schema-validation"],
+    line: (f, rootDir, verbose) => {
+      const lines = [`  ${f.variable}  ${ui.dim(f.message)}`];
+      lines.push(...locationLines(f, rootDir, verbose));
+      return lines;
+    },
+  },
 ];
 
 /**

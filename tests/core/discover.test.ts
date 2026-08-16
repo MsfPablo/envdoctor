@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -42,5 +43,37 @@ describe("discoverFiles", () => {
 
     // Should not throw, and should still find the readable .env at the root.
     expect(discovered.some((f) => f.filePath.endsWith(".env"))).toBe(true);
+  });
+
+  it("respects --staged git filter", async () => {
+    const root = tempProject();
+    fs.writeFileSync(path.join(root, ".env"), "A=1\n");
+    fs.writeFileSync(path.join(root, ".env.local"), "B=2\n");
+
+    execFileSync("git", ["init", "-b", "main"], { cwd: root });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+    execFileSync("git", ["add", ".env.local"], { cwd: root });
+
+    const discovered = await discoverFiles(root, DEFAULT_CONFIG, registry, { gitFilter: { staged: true } });
+    const paths = discovered.map((f) => path.basename(f.filePath));
+    expect(paths).toEqual([".env.local"]);
+  });
+
+  it("respects --since git filter", async () => {
+    const root = tempProject();
+    fs.writeFileSync(path.join(root, ".env"), "A=1\n");
+
+    execFileSync("git", ["init", "-b", "main"], { cwd: root });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+    execFileSync("git", ["add", ".env"], { cwd: root });
+    execFileSync("git", ["commit", "-m", "initial"], { cwd: root });
+
+    fs.writeFileSync(path.join(root, ".env.local"), "B=2\n");
+
+    const discovered = await discoverFiles(root, DEFAULT_CONFIG, registry, { gitFilter: { since: "HEAD" } });
+    const paths = discovered.map((f) => path.basename(f.filePath));
+    expect(paths).toEqual([".env.local"]);
   });
 });

@@ -23,6 +23,7 @@ export async function assembleModel(
   const envFiles: EnvironmentFile[] = [];
   const composeFiles: EnvironmentFile[] = [];
   const actionFiles: EnvironmentFile[] = [];
+  const k8sFiles: EnvironmentFile[] = [];
   const sourceFiles: EnvironmentFile[] = [];
   const parseErrors: { filePath: string; error: string }[] = [];
 
@@ -53,6 +54,9 @@ export async function assembleModel(
       case "github-actions":
         actionFiles.push(parsed);
         break;
+      case "kubernetes":
+        k8sFiles.push(parsed);
+        break;
       case "source":
         sourceFiles.push(parsed);
         break;
@@ -62,17 +66,20 @@ export async function assembleModel(
   applyIgnoreVariables(envFiles, config);
   applyIgnoreVariables(composeFiles, config);
   applyIgnoreVariables(actionFiles, config);
+  applyIgnoreVariables(k8sFiles, config);
   applyIgnoreVariables(sourceFiles, config);
 
   applyEnvironmentOverrides(envFiles, rootDir, config);
 
-  const allFiles = [...envFiles, ...composeFiles, ...actionFiles, ...sourceFiles];
+  const allFiles = [...envFiles, ...composeFiles, ...actionFiles, ...k8sFiles, ...sourceFiles];
 
   return {
     rootDir,
+    config,
     envFiles,
     composeFiles,
     actionFiles,
+    k8sFiles,
     sourceFiles,
     allFiles,
     parseErrors,

@@ -1,6 +1,7 @@
 import { dockerComposeParser } from "./docker-compose.js";
 import { envParser } from "./env.js";
 import { githubActionsParser } from "./github-actions.js";
+import { k8sParser } from "./k8s.js";
 import type { Parser, ParserRegistry } from "./parser.js";
 import { createSourceParser } from "./source.js";
 
@@ -18,6 +19,7 @@ export function defaultRegistry(options: RegistryOptions): ParserRegistry {
     envParser,
     dockerComposeParser,
     githubActionsParser,
+    k8sParser,
     createSourceParser(options.sourceExtensions),
   ] satisfies readonly Parser[];
 }

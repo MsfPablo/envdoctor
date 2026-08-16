@@ -25,7 +25,9 @@ export interface IndexedModel {
   composeDefinitions: Map<string, Definition[]>;
   /** Definitions found in GitHub Actions workflows, keyed by name. */
   actionDefinitions: Map<string, Definition[]>;
-  /** Every usage (source, compose, actions), keyed by name. */
+  /** Definitions found in Kubernetes manifests, keyed by name. */
+  k8sDefinitions: Map<string, Definition[]>;
+  /** Every usage (source, compose, actions, k8s), keyed by name. */
   usages: Map<string, Origin[]>;
   /** Usages that come specifically from source code. */
   sourceUsages: Map<string, Origin[]>;

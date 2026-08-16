@@ -105,6 +105,12 @@ envdoctor scan
 # Compare two environments
 envdoctor diff development production
 
+# Copy missing keys from .env to .env.local
+envdoctor sync development local
+
+# Scan only files changed on this branch
+envdoctor scan --since HEAD
+
 # Generate/update docs (dry-run first)
 envdoctor fix --dry-run
 envdoctor fix
@@ -153,11 +159,16 @@ Runs the full audit.
 | `--only <ruleId>` | Run only specific detector(s), comma-separated |
 | `--baseline <path>` | Suppress findings listed in a baseline file |
 | `--write-baseline <path>` | Write current findings to a baseline file |
+| `--staged` | Only scan files staged for commit |
+| `--since <ref>` | Only scan files changed since a git ref (e.g. `HEAD~1`) |
 
 **Exit codes:** `0` = clean, `1` = errors found, `2` = usage/config error
 
 The `--baseline` / `--write-baseline` pair lets you adopt `envdoctor` on a legacy
 project: snapshot today's findings, then fail CI only on *new* ones.
+
+`--staged` and `--since` are useful in pre-commit hooks and CI to audit only the
+files touched by a changeset instead of the whole repository.
 
 ### `envdoctor fix [options]`
 
@@ -166,6 +177,9 @@ Generates/updates safe artifacts based on the audit:
 - `ENVIRONMENT.md` — reference table + per-environment sections
 - `.github/ENVIRONMENT.md` — checklist of `secrets.*`/`vars.*` for GitHub Actions (if applicable)
 - `env.d.ts` — TypeScript ambient declaration for `process.env` variables
+- `envdoctor.schema.ts` — inferred Zod-style validation schema from observed values
+  (e.g. integer ranges, enum sets). Import and merge it into `envdoctor.config.ts`
+  to enable the `schema-validation` detector.
 
 | Option | Description |
 |--------|-------------|
@@ -176,6 +190,23 @@ Generates/updates safe artifacts based on the audit:
 
 Focused comparison between two environments (e.g. `dev prod`, `development production`).
 Shows per-variable status: `✓ same`, `⚠ different`, `❌ missing`.
+
+### `envdoctor sync <source> <target>`
+
+Copy missing variable *keys* from one environment file to another without
+overwriting existing values. Useful for keeping `.env.local` or `.env.production`
+up to date after adding variables to `.env`.
+
+```bash
+# Append keys that exist in .env but are missing from .env.local
+envdoctor sync development local
+
+# Or by explicit file suffix
+envdoctor sync .env .env.production
+```
+
+Only keys are copied; values are left untouched so target-specific values and
+secrets stay safe.
 
 ## Configuration
 
@@ -223,8 +254,13 @@ export default {
 
   // Per-variable value validation (feeds the schema-validation detector)
   schema: {
-    // PORT: { type: "integer" },
+    // PORT: { type: "integer", min: 1024 },
+    // RATE: { type: "float", min: 0, max: 1 },
     // NODE_ENV: { enum: ["development", "production", "test"] },
+    // API_URL: { type: "url" },
+    // FEATURE_FLAGS: { type: "json" },
+    // Optional variables are allowed to be empty/missing
+    // LOG_LEVEL: { type: "string", optional: true },
   },
 };
 ```

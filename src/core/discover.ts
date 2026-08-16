@@ -1,7 +1,9 @@
+import fs from "node:fs";
 import fg from "fast-glob";
 import type { EnvdoctorConfig } from "../config/config.js";
 import type { Parser, ParserRegistry } from "../parsers/parser.js";
 import { parserForPath } from "../parsers/parser.js";
+import { changedFilesSince, stagedFiles, type GitFilter } from "../utils/git.js";
 
 /** A file that a parser claimed during discovery. */
 export interface DiscoveredFile {
@@ -33,10 +35,15 @@ const ALWAYS_IGNORED = [
  * config's glob patterns. Respects node_modules/`dist`/etc. and the user's
  * `ignoreFiles`.
  */
+export interface DiscoverOptions {
+  gitFilter?: GitFilter;
+}
+
 export async function discoverFiles(
   rootDir: string,
   config: EnvdoctorConfig,
   registry: ParserRegistry,
+  options: DiscoverOptions = {},
 ): Promise<DiscoveredFile[]> {
   const sourceExts = config.sourceExtensions
     .map((ext) => ext.replace(/^\./, ""))
@@ -45,6 +52,7 @@ export async function discoverFiles(
     ...config.envFilePatterns,
     ...config.composeFilePatterns,
     ...config.actionsFilePatterns,
+    ...config.k8sFilePatterns,
     `**/*.{${sourceExts}}`,
   ];
 
@@ -61,8 +69,17 @@ export async function discoverFiles(
     ignore: [...ALWAYS_IGNORED, ...config.ignoreFiles],
   });
 
+  let changedFiles: Set<string> | undefined;
+  if (options.gitFilter?.since) {
+    changedFiles = changedFilesSince(rootDir, options.gitFilter.since);
+  } else if (options.gitFilter?.staged) {
+    changedFiles = stagedFiles(rootDir);
+  }
+
   const discovered: DiscoveredFile[] = [];
-  for (const filePath of matched) {
+  for (const rawPath of matched) {
+    const filePath = fs.realpathSync(rawPath);
+    if (changedFiles && !changedFiles.has(filePath)) continue;
     const parser = parserForPath(registry, filePath);
     if (!parser) continue;
     discovered.push({ filePath, parser });

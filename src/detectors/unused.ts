@@ -9,13 +9,14 @@ export const unusedDetector: Detector = {
   id: "unused",
   name: "unused",
   description:
-    "Defined in an environment file but never referenced in source, docker-compose, or GitHub Actions.",
+    "Defined in an environment file but never referenced in source, docker-compose, GitHub Actions, or Kubernetes manifests.",
   detect(index) {
     const findings = [];
     const used = new Set<string>(index.usages.keys());
-    // A variable that is re-defined in compose/actions is, by definition, used.
+    // A variable that is re-defined in compose/actions/k8s is, by definition, used.
     for (const name of index.composeDefinitions.keys()) used.add(name);
     for (const name of index.actionDefinitions.keys()) used.add(name);
+    for (const name of index.k8sDefinitions.keys()) used.add(name);
 
     const seen = new Set<string>();
     for (const [name, defs] of index.envDefinitions) {

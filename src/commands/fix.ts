@@ -5,6 +5,7 @@ import { loadProject } from "../core/pipeline.js";
 import { generateEnvExample } from "../generators/env-example.js";
 import { generateEnvTypes } from "../generators/env-types.js";
 import { generateEnvironmentDoc } from "../generators/environment-doc.js";
+import { generateSchema } from "../generators/schema.js";
 import {
   collectActionsChecklist,
   generateActionsChecklist,
@@ -41,6 +42,7 @@ export async function runFix(opts: FixOptions): Promise<number> {
     plan(".env.example", generateEnvExample(context.model), opts),
     plan("ENVIRONMENT.md", generateEnvironmentDoc(context.model), opts),
     plan("env.d.ts", generateEnvTypes(context.model), opts),
+    plan("envdoctor.schema.ts", generateSchema(context.model), opts),
   ];
   if (hasActionsRefs) {
     plans.push(plan(path.join(".github", "ENVIRONMENT.md"), generateActionsChecklist(context.model), opts));

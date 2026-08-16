@@ -1,3 +1,4 @@
+import type { EnvdoctorConfig } from "../config/config.js";
 import type { EnvironmentFile } from "./environment-file.js";
 import type { EnvironmentVariable } from "./environment-variable.js";
 import type { Origin } from "./origin.js";
@@ -10,12 +11,16 @@ import type { Origin } from "./origin.js";
 export interface ProjectModel {
   /** The project root the model was built from. */
   rootDir: string;
+  /** The resolved envdoctor config for this project. */
+  config: EnvdoctorConfig;
   /** Parsed `.env*` files, each tagged with an environment label. */
   envFiles: EnvironmentFile[];
   /** Parsed docker-compose files. */
   composeFiles: EnvironmentFile[];
   /** Parsed GitHub Actions workflow files. */
   actionFiles: EnvironmentFile[];
+  /** Parsed Kubernetes manifest files. */
+  k8sFiles: EnvironmentFile[];
   /** Source code files scanned for `process.env` / `import.meta.env` usage. */
   sourceFiles: EnvironmentFile[];
   /** Every file that was scanned, in any format. */

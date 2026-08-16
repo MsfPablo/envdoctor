@@ -1,6 +1,6 @@
 import type { EnvironmentVariable } from "./environment-variable.js";
 
-export type FileFormat = "dotenv" | "docker-compose" | "github-actions" | "source";
+export type FileFormat = "dotenv" | "docker-compose" | "github-actions" | "kubernetes" | "source";
 
 /**
  * The parsed contents of a single file, normalized to envdoctor's model.

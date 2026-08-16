@@ -5,6 +5,7 @@ import { runDiff } from "./commands/diff.js";
 import { runFix } from "./commands/fix.js";
 import { runInit } from "./commands/init.js";
 import { runScan } from "./commands/scan.js";
+import { runSync } from "./commands/sync.js";
 import { resolveRootDir } from "./commands/shared.js";
 import { ui } from "./utils/logger.js";
 
@@ -51,6 +52,8 @@ export async function main(argv: string[]): Promise<void> {
     .option("-v, --verbose", "Show file:line locations in the report")
     .option("--baseline <path>", "Suppress findings matching a baseline file")
     .option("--write-baseline <path>", "Write current findings to a baseline file")
+    .option("--staged", "Only scan files with staged git changes")
+    .option("--since <ref>", "Only scan files changed since a git ref")
     .action(async (opts) => {
       const rootDir = resolveRootDir(opts.dir);
       const format = opts.json ? "json" : opts.format;
@@ -67,6 +70,7 @@ export async function main(argv: string[]): Promise<void> {
         only: opts.only,
         baseline: opts.baseline,
         writeBaseline: opts.writeBaseline,
+        gitFilter: opts.staged ? { staged: true } : opts.since ? { since: opts.since } : undefined,
       });
     });
 
@@ -97,6 +101,16 @@ export async function main(argv: string[]): Promise<void> {
     .action(async (envA, envB, opts) => {
       const rootDir = resolveRootDir(opts.dir);
       process.exitCode = await runDiff({ rootDir, envA, envB, json: Boolean(opts.json) });
+    });
+
+  program
+    .command("sync <from> <to>")
+    .description("Copy missing variable keys from one environment file to another with placeholders.")
+    .option("-d, --dir <path>", "Project directory (default: current directory)")
+    .option("--dry-run", "Preview changes without writing")
+    .action(async (envA, envB, opts) => {
+      const rootDir = resolveRootDir(opts.dir);
+      process.exitCode = await runSync({ rootDir, envA: envA, envB: envB, dryRun: Boolean(opts.dryRun) });
     });
 
   program.exitOverride();

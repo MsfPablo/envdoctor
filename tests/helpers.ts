@@ -1,11 +1,13 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { DEFAULT_CONFIG, type EnvdoctorConfig } from "../src/config/config.js";
 import type { ProjectContext } from "../src/core/pipeline.js";
 import { loadProject } from "../src/core/pipeline.js";
 import { dockerComposeParser } from "../src/parsers/docker-compose.js";
 import { envParser } from "../src/parsers/env.js";
 import { githubActionsParser } from "../src/parsers/github-actions.js";
+import { k8sParser } from "../src/parsers/k8s.js";
 import { createSourceParser } from "../src/parsers/source.js";
 import type { EnvironmentFile } from "../src/models/environment-file.js";
 import type { ProjectModel } from "../src/models/project-model.js";
@@ -16,10 +18,11 @@ export interface InMemoryFile {
 }
 
 /** Build a `ProjectModel` directly from in-memory files (parser unit tests). */
-export function buildModel(files: InMemoryFile[]): ProjectModel {
+export function buildModel(files: InMemoryFile[], config: EnvdoctorConfig = DEFAULT_CONFIG): ProjectModel {
   const envFiles: EnvironmentFile[] = [];
   const composeFiles: EnvironmentFile[] = [];
   const actionFiles: EnvironmentFile[] = [];
+  const k8sFiles: EnvironmentFile[] = [];
   const sourceFiles: EnvironmentFile[] = [];
 
   const sourceParser = createSourceParser(["ts", "tsx", "js", "jsx", "mjs", "cjs"]);
@@ -32,6 +35,8 @@ export function buildModel(files: InMemoryFile[]): ProjectModel {
       parsed = dockerComposeParser.parse(file.content, file.path);
     } else if (githubActionsParser.match(file.path)) {
       parsed = githubActionsParser.parse(file.content, file.path);
+    } else if (k8sParser.match(file.path)) {
+      parsed = k8sParser.parse(file.content, file.path);
     } else {
       parsed = sourceParser.parse(file.content, file.path);
     }
@@ -46,6 +51,9 @@ export function buildModel(files: InMemoryFile[]): ProjectModel {
       case "github-actions":
         actionFiles.push(parsed);
         break;
+      case "kubernetes":
+        k8sFiles.push(parsed);
+        break;
       case "source":
         sourceFiles.push(parsed);
         break;
@@ -54,11 +62,13 @@ export function buildModel(files: InMemoryFile[]): ProjectModel {
 
   return {
     rootDir: "/test",
+    config,
     envFiles,
     composeFiles,
     actionFiles,
+    k8sFiles,
     sourceFiles,
-    allFiles: [...envFiles, ...composeFiles, ...actionFiles, ...sourceFiles],
+    allFiles: [...envFiles, ...composeFiles, ...actionFiles, ...k8sFiles, ...sourceFiles],
     parseErrors: [],
   };
 }
