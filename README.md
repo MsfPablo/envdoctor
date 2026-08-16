@@ -69,12 +69,17 @@
 ## Installation
 
 ```bash
-# From npm (once published)
+# From npm
 npm install -g @arunskg/envdoctor
 
 # Or run directly with npx
 npx @arunskg/envdoctor scan
 ```
+
+> **Note:** run `npx @arunskg/envdoctor` from your project directory, not from
+> inside a checkout of this repo — npx resolves the local package first, whose
+> `envdoctor` bin isn't on your PATH, and you'll see `envdoctor: command not
+> found`. After a global install, the short `envdoctor` command works anywhere.
 
 ## Quick Start
 
