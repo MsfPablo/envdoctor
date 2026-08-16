@@ -35,9 +35,15 @@ jobs:
 
       - name: Smoke test CLI
         run: |
+          set +e
           node dist/index.js scan --dir tests/fixtures/sample-project
-          echo "Exit code: $?"
-          # Sample project has issues, so exit code 1 is expected
+          code=$?
+          set -e
+          echo "Exit code: $code"
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit code 1 because the sample project has known issues"
+            exit 1
+          fi
 
   publish-dry-run:
     needs: test
