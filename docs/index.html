@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>envdoctor — env var consistency checker for 6 languages</title>
+  <meta name="description" content="envdoctor is a local-first consistency checker for environment variables. It reconciles env vars used in source code against your .env files and reports missing, unused, duplicate, type-mismatched, and leaked-secret variables. No network, no telemetry. Native ports for Node, Python, Go, Ruby, PHP, and Java." />
+  <meta name="theme-color" content="#0b0f14" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="envdoctor — one tool, six languages" />
+  <meta property="og:description" content="Local-first consistency checker for environment variables. Detects missing, unused, duplicate, type-mismatched, and leaked-secret vars across your .env files and source code. No network, no telemetry." />
+  <meta property="og:url" content="https://arun-skg.github.io/envdoctor/" />
+  <meta property="og:site_name" content="envdoctor" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="envdoctor — one tool, six languages" />
+  <meta name="twitter:description" content="Local-first consistency checker for environment variables. No network, no telemetry, values never printed." />
+
+  <link rel="canonical" href="https://arun-skg.github.io/envdoctor/" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./assets/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563eb'/%3E%3Ctext x='16' y='23' font-family='monospace' font-size='20' font-weight='700' text-anchor='middle' fill='white'%3E%24%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <a href="#main" class="visually-hidden">Skip to content</a>
+
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="#top">
+        <span class="logo">$</span>
+        <span>envdoctor</span>
+      </a>
+      <nav class="nav" aria-label="Primary">
+        <a class="nav-link" href="#demo">Demo</a>
+        <a class="nav-link" href="#features">Checks</a>
+        <a class="nav-link" href="#install">Install</a>
+        <a class="nav-link" href="#usage">Usage</a>
+        <a class="btn btn-ghost" href="https://github.com/arun-skg/envdoctor" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.82 1.19 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5Z"/></svg>
+          <span>GitHub</span>
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <span id="top"></span>
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="wrap">
+        <span class="eyebrow"><span class="dot"></span> Local-first · no network · no telemetry</span>
+        <h1>Catch environment drift<br />before it ships.</h1>
+        <p class="tagline">
+          A consistency checker that reconciles the environment variables your
+          <em>code</em> uses against the ones your <code>.env</code> files
+          <em>define</em> — and flags every mismatch.
+        </p>
+        <p class="subline">one tool · six languages</p>
+
+        <div class="hero-install">
+          <div class="copy-field">
+            <code>npm install -g @arunskg/envdoctor</code>
+            <button class="copy-btn" aria-label="Copy install command" data-copy="npm install -g @arunskg/envdoctor">
+              <span class="copy-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
+              <span class="copy-label">Copy</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="#install">Get started</a>
+          <a class="btn btn-ghost" href="https://github.com/arun-skg/envdoctor" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.82 1.19 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5Z"/></svg>
+            View on GitHub
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- TERMINAL DEMO -->
+    <section id="demo" class="alt">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>See exactly what drifted</h2>
+          <p>One command reconciles every source, then prints a readable audit. Values are never shown.</p>
+        </div>
+        <div class="terminal" role="img" aria-label="Terminal output of an envdoctor scan showing missing, unused, duplicate, and type-mismatch findings">
+          <div class="terminal-bar">
+            <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
+            <span class="ttitle">envdoctor scan --dir .</span>
+          </div>
+          <div class="terminal-body">
+            <div class="terminal-cmd"><span class="p">$</span> envdoctor scan --dir .</div>
+<pre aria-hidden="true">┌─────────────────────────────────────────────────────────────────┐
+│  <span class="term-cyan">ENVIRONMENT AUDIT</span>                                              │
+│  ════════════════════════════════════════════════════════════════│
+│                                                                 │
+│  <span class="term-red">Missing (error)</span>                                                │
+│  ─────────────────────────────────────────────────────────────  │
+│  <span class="term-red">❌  COMPOSE_ONLY</span>       docker-compose.yml:9   referenced but   │
+│                          not defined in any environment file   │
+│  <span class="term-red">❌  NEW_FEATURE_FLAG</span>   src/index.ts:5         used in source   │
+│                          code but not defined in any           │
+│                          environment file                      │
+│                                                                 │
+│  <span class="term-yellow">Unused (warning)</span>                                               │
+│  ─────────────────────────────────────────────────────────────  │
+│  <span class="term-yellow">⚠  DEBUG_MODE</span>          .env:7               defined but never │
+│                          referenced anywhere                    │
+│                                                                 │
+│  <span class="term-red">Duplicates (error)</span>                                             │
+│  ─────────────────────────────────────────────────────────────  │
+│  <span class="term-red">❌  NODE_ENV</span>            .env:2,12           defined 2 times   │
+│                                                                 │
+│  <span class="term-red">Type mismatch (error)</span>                                          │
+│  ─────────────────────────────────────────────────────────────  │
+│  <span class="term-red">❌  PORT</span>                expected: integer · found: string      │
+│                                                                 │
+│  <span class="term-dim">Summary: 8 files scanned · 15 variables · 4 errors · 16 warns</span> │
+└─────────────────────────────────────────────────────────────────┘
+<span class="term-red">✗ exit 1</span>  <span class="term-dim">— errors found, CI build fails</span></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section id="features">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>What it checks</h2>
+          <p>A suite of detectors runs over one normalized model of every place a variable can appear.</p>
+        </div>
+        <div class="grid">
+          <div class="card">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M11 8v3"/><path d="M11 14h.01"/></svg></div>
+            <h3>Missing / undefined</h3>
+            <p>A variable is referenced in source code, Compose, Kubernetes, or Actions but never defined in any <code>.env</code> file.</p>
+            <span class="sev err">Error</span>
+          </div>
+          <div class="card">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></div>
+            <h3>Unused variables</h3>
+            <p>Defined in a <code>.env</code> file but never referenced anywhere in your code or config — dead entries that drift out of sync.</p>
+            <span class="sev warn">Warning</span>
+          </div>
+          <div class="card">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V4a2 2 0 0 1 2-2h10"/></svg></div>
+            <h3>Duplicates</h3>
+            <p>The same key defined twice in one file, or across files sharing one environment label — a classic source of “which value wins?”.</p>
+            <span class="sev err">Error</span>
+          </div>
+          <div class="card">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/><path d="m9 9 6 6"/><path d="m15 9-6 6"/></svg></div>
+            <h3>Type mismatch</h3>
+            <p>Incompatible inferred types across environments, or a value that fails its own inferred type — e.g. <code>PORT</code> expected integer, found string.</p>
+            <span class="sev err">Error</span>
+          </div>
+          <div class="card">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+            <h3>Public-prefix leak</h3>
+            <p>A secret-looking variable uses a public framework prefix (<code>NEXT_PUBLIC_*</code>, <code>VITE_*</code>) and would ship straight into a client bundle.</p>
+            <span class="sev err">Error</span>
+          </div>
+          <div class="card">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+            <h3>Local-first &amp; private</h3>
+            <p>Everything runs on your machine. No network calls, no telemetry, and variable <em>values</em> are never printed or written to any artifact.</p>
+            <span class="sev ok">By design</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- INSTALL -->
+    <section id="install" class="alt">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>One tool, six languages</h2>
+          <p>Published as a standalone native port for each ecosystem — no Node required, no wrappers. Pick yours.</p>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="Install by language">
+          <button class="tab" role="tab" aria-selected="true"  aria-controls="p-node"   id="t-node"   data-target="p-node"   tabindex="0">Node</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="p-python" id="t-python" data-target="p-python" tabindex="-1">Python</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="p-go"     id="t-go"     data-target="p-go"     tabindex="-1">Go</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="p-ruby"   id="t-ruby"   data-target="p-ruby"   tabindex="-1">Ruby</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="p-php"    id="t-php"    data-target="p-php"    tabindex="-1">PHP</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="p-java"   id="t-java"   data-target="p-java"   tabindex="-1">Java</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="p-perl"   id="t-perl"   data-target="p-perl"   tabindex="-1">Perl<span class="pending">(pending)</span></button>
+        </div>
+
+        <!-- Node -->
+        <div class="panel" id="p-node" role="tabpanel" aria-labelledby="t-node">
+          <div class="lang-head">
+            <h3>Node <span style="color:var(--text-faint);font-size:.8rem;font-weight:600;">reference implementation</span></h3>
+            <a class="reg-link" href="https://www.npmjs.com/package/@arunskg/envdoctor" rel="noopener">View on npm →</a>
+          </div>
+          <div class="label">Install</div>
+          <div class="copy-field"><code class="no-prompt">npm install -g @arunskg/envdoctor</code><button class="copy-btn" aria-label="Copy"><span class="copy-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span><span class="copy-label">Copy</span></button></div>
+          <div class="label">Detects</div>
+          <p class="detects"><code>process.env.X</code> · <code>import.meta.env.X</code></p>
+          <p class="note">The Node port is the reference and has the fullest detector set — schema validation, weak-secret and typo detection, environment diffs, and more.</p>
+        </div>
+
+        <!-- Python -->
+        <div class="panel" id="p-python" role="tabpanel" aria-labelledby="t-python" hidden>
+          <div class="lang-head">
+            <h3>Python</h3>
+            <a class="reg-link" href="https://pypi.org/project/arun-envdoctor/" rel="noopener">View on PyPI →</a>
+          </div>
+          <div class="label">Install</div>
+          <div class="copy-field"><code class="no-prompt">pip install arun-envdoctor</code><button class="copy-btn" aria-label="Copy"><span class="copy-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span><span class="copy-label">Copy</span></button></div>
+          <div class="label">Detects</div>
+          <p class="detects"><code>os.getenv</code> · <code>os.environ[...]</code> · <code>os.environ.get</code></p>
+          <p class="note">The PyPI package is named <strong>arun-envdoctor</strong> (the bare name is blocked), but the installed command and importable package are both <code>envdoctor</code>.</p>
+        </div>
+
+        <!-- Go -->
+        <div class="panel" id="p-go" role="tabpanel" aria-labelledby="t-go" hidden>
+          <div class="lang-head">
+            <h3>Go</h3>
+            <a class="reg-link" href="https://pkg.go.dev/github.com/arun-skg/envdoctor/go" rel="noopener">View on pkg.go.dev →</a>
+          </div>
+          <div class="label">Install</div>
+          <div class="copy-field"><code class="no-prompt">go install github.com/arun-skg/envdoctor/go/cmd/envdoctor@latest</code><button class="copy-btn" aria-label="Copy"><span class="copy-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span><span class="copy-label">Copy</span></button></div>
+          <div class="label">Detects</div>
+          <p class="detects"><code>os.Getenv</code> · <code>os.LookupEnv</code></p>
+        </div>
+
+        <!-- Ruby -->
+        <div class="panel" id="p-ruby" role="tabpanel" aria-labelledby="t-ruby" hidden>
+          <div class="lang-head">
+            <h3>Ruby</h3>
+            <a class="reg-link" href="https://rubygems.org/gems/envdoctor" rel="noopener">View on RubyGems →</a>
+          </div>
+          <div class="label">Install</div>
+          <div class="copy-field"><code class="no-prompt">gem install envdoctor</code><button class="copy-btn" aria-label="Copy"><span class="copy-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span><span class="copy-label">Copy</span></button></div>
+          <div class="label">Detects</div>
+          <p class="detects"><code>ENV["X"]</code> · <code>ENV.fetch("X")</code></p>
+        </div>
+
+        <!-- PHP -->
+        <div class="panel" id="p-php" role="tabpanel" aria-labelledby="t-php" hidden>
+          <div class="lang-head">
+            <h3>PHP</h3>
+            <a class="reg-link" href="https://packagist.org/packages/arun-skg/envdoctor" rel="noopener">View on Packagist →</a>
+          </div>
+          <div class="label">Install</div>
+          <div class="copy-field"><code class="no-prompt">composer require --dev arun-skg/envdoctor</code><button class="copy-btn" aria-label="Copy"><span class="copy-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span><span class="copy-label">Copy</span></button></div>
+          <div class="label">Detects</div>
+          <p class="detects"><code>getenv</code> · <code>$_ENV</code> · <code>$_SERVER</code></p>
+        </div>
+
+        <!-- Java -->
+        <div class="panel" id="p-java" role="tabpanel" aria-labelledby="t-java" hidden>
+          <div class="lang-head">
+            <h3>Java</h3>
+            <a class="reg-link" href="https://central.sonatype.com/artifact/io.github.arun-skg/envdoctor" rel="noopener">View on Maven Central →</a>
+          </div>
+          <div class="label">Add the dependency (Maven)</div>
+          <div class="code-block">
+            <div class="cb-head"><span>pom.xml</span><button class="copy-btn" aria-label="Copy" data-copy="&lt;dependency&gt;
+  &lt;groupId&gt;io.github.arun-skg&lt;/groupId&gt;
+  &lt;artifactId&gt;envdoctor&lt;/artifactId&gt;
+  &lt;version&gt;0.1.0&lt;/version&gt;
+&lt;/dependency&gt;"><span class="copy-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span><span class="copy-label">Copy</span></button></div>
+<pre>&lt;dependency&gt;
+  &lt;groupId&gt;io.github.arun-skg&lt;/groupId&gt;
+  &lt;artifactId&gt;envdoctor&lt;/artifactId&gt;
+  &lt;version&gt;0.1.0&lt;/version&gt;
+&lt;/dependency&gt;</pre>
+          </div>
+          <div class="label">Detects</div>
+          <p class="detects"><code>System.getenv("X")</code></p>
+        </div>
+
+        <!-- Perl -->
+        <div class="panel" id="p-perl" role="tabpanel" aria-labelledby="t-perl" hidden>
+          <div class="lang-head">
+            <h3>Perl <span style="color:var(--warn);font-size:.8rem;font-weight:700;">pending CPAN release</span></h3>
+          </div>
+          <div class="label">Install (once released)</div>
+          <div class="copy-field"><code class="no-prompt">cpanm App::Envdoctor</code><button class="copy-btn" aria-label="Copy"><span class="copy-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span><span class="copy-label">Copy</span></button></div>
+          <div class="label">Detects</div>
+          <p class="detects"><code>$ENV{X}</code></p>
+          <p class="note">The Perl port is implemented and awaiting its first CPAN release.</p>
+        </div>
+
+        <p style="text-align:center;margin-top:26px;color:var(--text-soft);font-size:.95rem;">
+          Every port shares the same CLI:
+          <code style="font-family:var(--font-mono);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px 8px;">envdoctor scan --dir .</code>
+          and exits <code style="font-family:var(--font-mono);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px 8px;">1</code> on errors.
+        </p>
+      </div>
+    </section>
+
+    <!-- USAGE -->
+    <section id="usage">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Getting started</h2>
+          <p>Give envdoctor a directory, and it reconciles your code against your environment files.</p>
+        </div>
+
+        <div class="usage-grid">
+          <div class="code-block">
+            <div class="cb-head"><span>.env</span></div>
+<pre>NODE_ENV=development
+NODE_ENV=production   <span class="term-red"># duplicate</span>
+DATABASE_URL=postgres://localhost/app
+PORT=three-thousand   <span class="term-red"># not an integer</span>
+DEBUG_MODE=true       <span class="term-yellow"># never used</span></pre>
+          </div>
+          <div class="code-block">
+            <div class="cb-head"><span>src/index.ts</span></div>
+<pre>const db   = process.env.DATABASE_URL;
+const port = process.env.PORT;
+const flag = process.env.NEW_FEATURE_FLAG;
+<span class="term-dim">//                       ^ not defined
+//                         in any .env file</span></pre>
+          </div>
+        </div>
+
+        <div class="steps">
+          <div class="step">
+            <div class="num">1</div>
+            <div>
+              <h4>Bootstrap your project</h4>
+              <p><code>envdoctor init</code> creates a config, a generated <code>.env.example</code>, and <code>ENVIRONMENT.md</code> docs — never overwriting existing files.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="num">2</div>
+            <div>
+              <h4>Scan for issues</h4>
+              <p><code>envdoctor scan --dir .</code> runs every detector and prints the audit above. Exits <code>0</code> when clean, <code>1</code> when errors are found.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="num">3</div>
+            <div>
+              <h4>Tighten for CI</h4>
+              <p><code>envdoctor scan --strict</code> promotes warnings to errors too, so unused vars and other warnings also fail the build.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="num">4</div>
+            <div>
+              <h4>Drop it into your pipeline</h4>
+              <p>Because it exits non-zero on errors, a single line in CI blocks any merge that introduces environment drift — no plugin, no service, no config server.</p>
+            </div>
+          </div>
+        </div>
+
+        <div style="max-width:720px;margin:26px auto 0;">
+          <div class="code-block">
+            <div class="cb-head">
+              <span>ci.yml</span>
+              <button class="copy-btn" aria-label="Copy" data-copy="- name: Check environment consistency
+  run: envdoctor scan --strict"><span class="copy-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span><span class="copy-label">Copy</span></button>
+            </div>
+<pre><span class="term-dim"># fail the build on any drift</span>
+- name: Check environment consistency
+  run: envdoctor scan --strict</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- WHY LOCAL-FIRST -->
+    <section id="why" class="alt">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Why local-first</h2>
+          <p>Environment variables are where secrets live. A checker that reads them should never be a new place they can leak.</p>
+        </div>
+        <div class="why">
+          <div class="pill">
+            <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> No network</h3>
+            <p>Everything runs on your machine. envdoctor makes zero outbound requests — nothing to review in a proxy log, nothing to allowlist.</p>
+          </div>
+          <div class="pill">
+            <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> No telemetry</h3>
+            <p>No usage pings, no analytics, no phone-home. What you scan stays entirely with you.</p>
+          </div>
+          <div class="pill">
+            <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Values never printed</h3>
+            <p>Reports reference variables by name and location only. Secret <em>values</em> are never printed to the terminal or written into generated files.</p>
+          </div>
+          <div class="pill">
+            <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> CI-friendly by default</h3>
+            <p>A clean exit code contract — <code>0</code> for pass, <code>1</code> for errors — means it drops into any pipeline without a wrapper.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="wrap">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a class="brand" href="#top"><span class="logo">$</span><span>envdoctor</span></a>
+          <p>A local-first consistency checker for environment variables — one tool, six native ports, no network and no telemetry.</p>
+        </div>
+        <div>
+          <h4>Project</h4>
+          <ul>
+            <li><a href="https://github.com/arun-skg/envdoctor" rel="noopener">GitHub repository</a></li>
+            <li><a href="https://github.com/arun-skg/envdoctor#readme" rel="noopener">Documentation</a></li>
+            <li><a href="https://github.com/arun-skg/envdoctor/issues" rel="noopener">Issue tracker</a></li>
+            <li><a href="https://github.com/arun-skg/envdoctor/blob/main/CONTRIBUTING.md" rel="noopener">Contributing</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Package registries</h4>
+          <ul>
+            <li><a href="https://www.npmjs.com/package/@arunskg/envdoctor" rel="noopener">npm — Node</a></li>
+            <li><a href="https://pypi.org/project/arun-envdoctor/" rel="noopener">PyPI — Python</a></li>
+            <li><a href="https://pkg.go.dev/github.com/arun-skg/envdoctor/go" rel="noopener">pkg.go.dev — Go</a></li>
+            <li><a href="https://rubygems.org/gems/envdoctor" rel="noopener">RubyGems — Ruby</a></li>
+            <li><a href="https://packagist.org/packages/arun-skg/envdoctor" rel="noopener">Packagist — PHP</a></li>
+            <li><a href="https://central.sonatype.com/artifact/io.github.arun-skg/envdoctor" rel="noopener">Maven Central — Java</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Released under the MIT License.</span>
+        <span>Built for developers who hate silent environment bugs.</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="./assets/main.js" defer></script>
+</body>
+</html>
