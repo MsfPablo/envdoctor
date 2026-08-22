@@ -25,14 +25,16 @@ Reconciles the variables **used** in Go source (`os.Getenv("X")`,
 | Rule | Severity | Meaning |
 |------|----------|---------|
 | `undefined-in-source` | error | Used in code but not defined in any `.env` file |
+| `duplicates` | error | The same key is defined 2+ times within a single `.env` file |
+| `public-prefix` | error | A secret-looking variable is exposed to client bundles via a public prefix (`NEXT_PUBLIC_`, `VITE_`, `REACT_APP_`, `EXPO_PUBLIC_`, `GATSBY_`, `NUXT_PUBLIC_`, `VUE_APP_`, `PUBLIC_`) |
 | `unused` | warning | Defined in `.env` but never referenced in source |
 
 Line and block comments are stripped before scanning. `scan` exits `1` on
 errors (or warnings with `--strict`). Values are never printed.
 
-> This port implements the core missing/unused reconciliation. The additional
-> detectors (duplicates, type-mismatch, schema validation, public-prefix secret
-> leaks, and more) currently live only in the
+> This port implements the core missing/unused reconciliation plus the
+> `duplicates` and `public-prefix` detectors. Further detectors (type-mismatch,
+> schema validation, and more) currently live only in the
 > [Node reference implementation](https://github.com/arun-skg/envdoctor).
 
 ## Development

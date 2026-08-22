@@ -24,15 +24,17 @@ Reconciles variables **used** in PHP source (`getenv("X")`, `$_ENV["X"]`,
 | Rule | Severity | Meaning |
 |------|----------|---------|
 | `undefined-in-source` | error | Used in code but not defined in any `.env` file |
+| `duplicates` | error | Same key defined 2+ times in a single `.env` file |
+| `public-prefix` | error | Secret-looking variable exposed to client bundles via a public prefix (`NEXT_PUBLIC_`, `VITE_`, `REACT_APP_`, …) |
 | `unused` | warning | Defined in `.env` but never referenced in source |
 
 Line (`//`, `#`) and block (`/* */`) comments are stripped before scanning.
 `scan` exits `1` on errors (or warnings with `--strict`). Values are never
 printed.
 
-> This port implements the core missing/unused reconciliation. The additional
-> detectors (duplicates, type-mismatch, schema validation, public-prefix secret
-> leaks, and more) currently live only in the
+> This port implements missing/unused reconciliation plus duplicate-key and
+> public-prefix secret-leak detection. The remaining detectors (type-mismatch,
+> schema validation, and more) currently live only in the
 > [Node reference implementation](https://github.com/arun-skg/envdoctor).
 
 ## Development

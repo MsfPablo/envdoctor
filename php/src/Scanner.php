@@ -19,6 +19,14 @@ final class Scanner
 
     private const ENV_LINE = '/^\s*(?:export\s+)?([A-Za-z_]\w*)\s*=/';
 
+    /** @var string[] Public/client-bundle prefixes (case-sensitive). */
+    private const PUBLIC_PREFIXES = [
+        'NEXT_PUBLIC_', 'VITE_', 'REACT_APP_', 'EXPO_PUBLIC_',
+        'GATSBY_', 'NUXT_PUBLIC_', 'VUE_APP_', 'PUBLIC_',
+    ];
+
+    private const SECRET_RE = '/SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE|CREDENTIAL|API_?KEY|ACCESS_?KEY|AUTH/i';
+
     private static function blank(string $s): string
     {
         return preg_replace('/[^\n]/', ' ', $s);
@@ -54,7 +62,11 @@ final class Scanner
         return $used;
     }
 
-    /** @return array<string, array{file: string, line: int}> */
+    /**
+     * Returns all occurrences per key: name => list of {file, line}, in order.
+     *
+     * @return array<string, array<int, array{file: string, line: int}>>
+     */
     public static function parseEnv(string $path, string $content): array
     {
         $defined = [];
@@ -64,11 +76,24 @@ final class Scanner
                 continue;
             }
             if (preg_match(self::ENV_LINE, $raw, $m)) {
-                $defined[$m[1]] ??= ['file' => $path, 'line' => $i + 1];
+                $defined[$m[1]][] = ['file' => $path, 'line' => $i + 1];
             }
         }
 
         return $defined;
+    }
+
+    private static function isPublicPrefix(string $name): bool
+    {
+        $hasPrefix = false;
+        foreach (self::PUBLIC_PREFIXES as $p) {
+            if (str_starts_with($name, $p)) {
+                $hasPrefix = true;
+                break;
+            }
+        }
+
+        return $hasPrefix && preg_match(self::SECRET_RE, $name) === 1;
     }
 
     /** @return string[] */
@@ -109,9 +134,23 @@ final class Scanner
     {
         $root = rtrim($root, DIRECTORY_SEPARATOR);
         $defined = [];
+        $dupFindings = [];
         foreach (self::discoverFiles($root, '', true) as $f) {
-            foreach (self::parseEnv(self::rel($root, $f), (string) file_get_contents($f)) as $k => $v) {
-                $defined[$k] ??= $v;
+            $rel = self::rel($root, $f);
+            foreach (self::parseEnv($rel, (string) file_get_contents($f)) as $k => $origins) {
+                if (count($origins) >= 2) {
+                    $lines = array_map(fn($o) => $o['line'], $origins);
+                    $dupFindings[] = new Finding(
+                        'duplicates',
+                        'error',
+                        $k,
+                        'defined ' . count($origins) . ' times in the same file (lines '
+                            . implode(', ', $lines) . ')',
+                        $origins[0]
+                    );
+                }
+                // First occurrence (first file wins) counts as the definition.
+                $defined[$k] ??= $origins[0];
             }
         }
 
@@ -136,8 +175,23 @@ final class Scanner
                 );
             }
         }
+        usort($dupFindings, fn($a, $b) => strcmp($a->name, $b->name));
+        foreach ($dupFindings as $finding) {
+            $findings[] = $finding;
+        }
         $definedNames = array_keys($defined);
         sort($definedNames);
+        foreach ($definedNames as $name) {
+            if (self::isPublicPrefix($name)) {
+                $findings[] = new Finding(
+                    'public-prefix',
+                    'error',
+                    $name,
+                    'secret-looking variable is exposed to client bundles via a public prefix',
+                    $defined[$name]
+                );
+            }
+        }
         foreach ($definedNames as $name) {
             if (!isset($used[$name])) {
                 $findings[] = new Finding(
