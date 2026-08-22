@@ -11,10 +11,12 @@ module Envdoctor
     def run(argv)
       dir = "."
       strict = false
+      json = false
       parser = OptionParser.new do |o|
         o.banner = "Usage: envdoctor scan [options]"
         o.on("-d", "--dir DIR", "Project root (default: cwd)") { |v| dir = v }
         o.on("--strict", "Treat warnings as errors") { strict = true }
+        o.on("--json", "Emit findings as a JSON array") { json = true }
       end
       args = argv.dup
       args.shift if args.first == "scan"
@@ -24,6 +26,11 @@ module Envdoctor
       findings = Scanner.scan(root)
       errors = findings.select { |f| f.severity == "error" }
       warnings = findings.select { |f| f.severity == "warning" }
+
+      if json
+        puts Scanner.to_json_array(findings)
+        return (!errors.empty? || (strict && !warnings.empty?)) ? 1 : 0
+      end
 
       puts "ENVIRONMENT AUDIT"
       puts "=" * 40

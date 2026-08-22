@@ -12,6 +12,7 @@ final class Cli
     {
         $dir = '.';
         $strict = false;
+        $json = false;
         $args = array_slice($argv, 1);
         if (($args[0] ?? null) === 'scan') {
             array_shift($args);
@@ -24,6 +25,8 @@ final class Cli
                 $dir = substr($a, 6);
             } elseif ($a === '--strict') {
                 $strict = true;
+            } elseif ($a === '--json') {
+                $json = true;
             }
         }
 
@@ -31,6 +34,12 @@ final class Cli
         $findings = Scanner::scan($root);
         $errors = array_values(array_filter($findings, fn($f) => $f->severity === 'error'));
         $warnings = array_values(array_filter($findings, fn($f) => $f->severity === 'warning'));
+
+        if ($json) {
+            echo Scanner::toJsonArray($findings) . "\n";
+
+            return ($errors || ($strict && $warnings)) ? 1 : 0;
+        }
 
         echo "ENVIRONMENT AUDIT\n";
         echo str_repeat('=', 40) . "\n";

@@ -14,6 +14,7 @@ composer require --dev arun-skg/envdoctor
 ```bash
 vendor/bin/envdoctor scan --dir .        # audit; exit 1 on errors
 vendor/bin/envdoctor scan --strict       # treat warnings as errors too
+vendor/bin/envdoctor scan --json         # emit findings as a JSON array (values never included)
 ```
 
 ## What it detects
@@ -26,16 +27,21 @@ Reconciles variables **used** in PHP source (`getenv("X")`, `$_ENV["X"]`,
 | `undefined-in-source` | error | Used in code but not defined in any `.env` file |
 | `duplicates` | error | Same key defined 2+ times in a single `.env` file |
 | `public-prefix` | error | Secret-looking variable exposed to client bundles via a public prefix (`NEXT_PUBLIC_`, `VITE_`, `REACT_APP_`, …) |
+| `type-mismatch` | error | Variable's inferred value type differs across environments (e.g. integer vs string) |
 | `unused` | warning | Defined in `.env` but never referenced in source |
+| `environment-diff` | warning | Defined in some environments but missing from others |
+| `weak-secret` | warning | Secret-looking variable has an empty, short, or placeholder value |
+| `typo` | warning | Used name closely matches a defined name (likely misspelling) |
+
+Environment labels come from the `.env` filename (`.env`→`default`,
+`.env.local`→`local`, `.env.production`→`production`,
+`.env.production.local`→`production`); `*.example` files are skipped. Values are
+read only to power detection and are **never** included in any output.
 
 Line (`//`, `#`) and block (`/* */`) comments are stripped before scanning.
-`scan` exits `1` on errors (or warnings with `--strict`). Values are never
-printed.
-
-> This port implements missing/unused reconciliation plus duplicate-key and
-> public-prefix secret-leak detection. The remaining detectors (type-mismatch,
-> schema validation, and more) currently live only in the
-> [Node reference implementation](https://github.com/arun-skg/envdoctor).
+`scan` exits `1` on errors (or warnings with `--strict`). Pass `--json` to emit
+the findings as a JSON array (keys: `rule`, `severity`, `name`, `message`,
+`file`, `line`) — still without any values.
 
 ## Development
 
