@@ -4,16 +4,24 @@ Native Python port of [envdoctor](https://github.com/arun-skg/envdoctor) — a
 local-first consistency checker for environment variables, distributed on PyPI
 so Python projects can use it without Node.
 
+## Install
+
 ```bash
 pip install arun-envdoctor
-envdoctor scan --dir .
 ```
 
 > The PyPI **distribution** is named `arun-envdoctor` (PyPI blocks `envdoctor` as
 > too similar to an existing project), but the installed **command** and the
 > importable **package** are both still `envdoctor`.
 
-## What it does
+## Quick start
+
+```bash
+envdoctor scan --dir .        # audit; exit 1 on errors
+envdoctor scan --strict       # treat warnings as errors too
+```
+
+## What it detects
 
 Reconciles the environment variables **used** in your Python source
 (`os.getenv("X")`, `os.environ.get("X")`, `os.environ["X"]`, and the
@@ -27,10 +35,13 @@ then reports:
 
 Comments and docstrings are stripped before scanning, so documented examples
 don't cause false positives. Nothing is uploaded and variable **values** are
-never printed.
+never printed. `envdoctor scan` exits `1` when there are errors (or with
+`--strict`, warnings), making it CI-friendly.
 
-`envdoctor scan` exits `1` when there are errors (or with `--strict`, warnings),
-making it CI-friendly.
+> This port implements the core missing/unused reconciliation. The additional
+> detectors (duplicates, type-mismatch, schema validation, public-prefix secret
+> leaks, and more) currently live only in the
+> [Node reference implementation](https://github.com/arun-skg/envdoctor).
 
 ## Library use
 
@@ -50,6 +61,10 @@ pip install -e ".[dev]" pytest
 pytest
 ```
 
-This package is one of several native, per-ecosystem ports; the reference
-implementation and full detector suite live in the
-[main repository](https://github.com/arun-skg/envdoctor).
+## Other languages
+
+envdoctor ships as a standalone native port for each ecosystem:
+
+- [Node (reference)](..) · [Go](../go) · [Ruby](../ruby) · [PHP](../php) · [Java](../java) · [Perl](../perl)
+- 📖 Docs: [arun-skg.github.io/envdoctor](https://arun-skg.github.io/envdoctor/)
+- Main repository: [github.com/arun-skg/envdoctor](https://github.com/arun-skg/envdoctor)
