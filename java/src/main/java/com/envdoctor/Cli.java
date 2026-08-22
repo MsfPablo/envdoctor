@@ -15,6 +15,7 @@ public final class Cli {
     public static int run(String[] args) {
         String dir = ".";
         boolean strict = false;
+        boolean json = false;
         int start = (args.length > 0 && args[0].equals("scan")) ? 1 : 0;
         for (int i = start; i < args.length; i++) {
             String a = args[i];
@@ -24,12 +25,19 @@ public final class Cli {
                 dir = a.substring("--dir=".length());
             } else if (a.equals("--strict")) {
                 strict = true;
+            } else if (a.equals("--json")) {
+                json = true;
             }
         }
 
         List<Scanner.Finding> findings = Scanner.scan(Path.of(dir).toAbsolutePath().normalize());
         List<Scanner.Finding> errors = findings.stream().filter(f -> f.severity().equals("error")).toList();
         List<Scanner.Finding> warnings = findings.stream().filter(f -> f.severity().equals("warning")).toList();
+
+        if (json) {
+            System.out.println(toJson(findings));
+            return (!errors.isEmpty() || (strict && !warnings.isEmpty())) ? 1 : 0;
+        }
 
         System.out.println("ENVIRONMENT AUDIT");
         System.out.println("=".repeat(40));
@@ -52,5 +60,50 @@ public final class Cli {
         System.out.printf("%nSummary: %d error(s), %d warning(s)%n", errors.size(), warnings.size());
 
         return (!errors.isEmpty() || (strict && !warnings.isEmpty())) ? 1 : 0;
+    }
+
+    /** Hand-built JSON array; keys exactly rule, severity, name, message, file, line. */
+    public static String toJson(List<Scanner.Finding> findings) {
+        StringBuilder sb = new StringBuilder();
+        sb.append('[');
+        for (int i = 0; i < findings.size(); i++) {
+            Scanner.Finding f = findings.get(i);
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append('{')
+              .append("\"rule\":").append(quote(f.rule())).append(',')
+              .append("\"severity\":").append(quote(f.severity())).append(',')
+              .append("\"name\":").append(quote(f.name())).append(',')
+              .append("\"message\":").append(quote(f.message())).append(',')
+              .append("\"file\":").append(f.file() == null ? "null" : quote(f.file())).append(',')
+              .append("\"line\":").append(f.line())
+              .append('}');
+        }
+        sb.append(']');
+        return sb.toString();
+    }
+
+    private static String quote(String s) {
+        StringBuilder b = new StringBuilder(s.length() + 2);
+        b.append('"');
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"': b.append("\\\""); break;
+                case '\\': b.append("\\\\"); break;
+                case '\n': b.append("\\n"); break;
+                case '\r': b.append("\\r"); break;
+                case '\t': b.append("\\t"); break;
+                default:
+                    if (c < 0x20) {
+                        b.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        b.append(c);
+                    }
+            }
+        }
+        b.append('"');
+        return b.toString();
     }
 }

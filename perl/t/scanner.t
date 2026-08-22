@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 14;
+use Test::More tests => 28;
 use File::Temp ();
 use File::Spec ();
 use FindBin ();
@@ -62,3 +62,68 @@ ok( $pub{NEXT_PUBLIC_API_KEY}, 'NEXT_PUBLIC_API_KEY flagged as public-prefix' );
 ok( !$pub{PUBLIC_URL}, 'PUBLIC_URL not flagged' );
 ok( !$pub{API_KEY}, 'bare API_KEY not flagged' );
 ok( !$pub{PUBLIC_KEY}, 'PUBLIC_KEY not flagged (bare KEY excluded)' );
+
+# ---- env labels, values never leak ------------------------------------------
+is( App::Envdoctor::Scanner::env_label('.env'),                  'default',    'label .env' );
+is( App::Envdoctor::Scanner::env_label('.env.local'),            'local',      'label local' );
+is( App::Envdoctor::Scanner::env_label('.env.production.local'), 'production', 'label strips .local' );
+
+# ---- weak-secret + typo + no value leakage ----------------------------------
+my $dir3 = File::Temp->newdir;
+open my $e3, '>', File::Spec->catfile( "$dir3", '.env' ) or die $!;
+print {$e3} "API_KEY=changeme\nSTRONG_TOKEN=a7Kf93ZqL0\nDATABASE_URL=postgres://localhost\n";
+close $e3;
+open my $s3, '>', File::Spec->catfile( "$dir3", 'app.pl' ) or die $!;
+print {$s3}
+    "\$ENV{API_KEY};\n\$ENV{STRONG_TOKEN};\n\$ENV{DATABASE_URL};\n\$ENV{DATBASE_URL};\n";
+close $s3;
+
+my $f3 = App::Envdoctor::Scanner::scan("$dir3");
+my ($weak) = grep { $_->{rule} eq 'weak-secret' && $_->{name} eq 'API_KEY' } @$f3;
+ok( $weak, 'API_KEY flagged as weak-secret' );
+is( $weak->{severity}, 'warning', 'weak-secret is a warning' );
+ok( !( grep { $_->{rule} eq 'weak-secret' && $_->{name} eq 'STRONG_TOKEN' } @$f3 ),
+    'strong secret not flagged' );
+my ($typo) = grep { $_->{rule} eq 'typo' && $_->{name} eq 'DATBASE_URL' } @$f3;
+ok( $typo, 'DATBASE_URL flagged as typo' );
+is( $typo->{message}, '"DATBASE_URL" is not defined; did you mean "DATABASE_URL"?',
+    'typo message suggests DATABASE_URL' );
+my $blob3 = join "\n", map { "$_->{message}" } @$f3;
+ok( $blob3 !~ /changeme/ && $blob3 !~ /postgres/ && $blob3 !~ /a7Kf93ZqL0/,
+    'no value strings leak into findings' );
+
+# ---- environment-diff + type-mismatch ---------------------------------------
+my $dir4 = File::Temp->newdir;
+open my $ea, '>', File::Spec->catfile( "$dir4", '.env' ) or die $!;
+print {$ea} "PORT=8080\nONLY_DEFAULT=1\n";
+close $ea;
+open my $eb, '>', File::Spec->catfile( "$dir4", '.env.production' ) or die $!;
+print {$eb} "PORT=high\n";
+close $eb;
+open my $s4, '>', File::Spec->catfile( "$dir4", 'app.pl' ) or die $!;
+print {$s4} "\$ENV{PORT};\n\$ENV{ONLY_DEFAULT};\n";
+close $s4;
+
+my $f4 = App::Envdoctor::Scanner::scan("$dir4");
+my ($tm) = grep { $_->{rule} eq 'type-mismatch' && $_->{name} eq 'PORT' } @$f4;
+ok( $tm, 'PORT flagged as type-mismatch (integer vs string)' );
+is( $tm->{severity}, 'error', 'type-mismatch is an error' );
+my ($ed) = grep { $_->{rule} eq 'environment-diff' && $_->{name} eq 'ONLY_DEFAULT' } @$f4;
+ok( $ed, 'ONLY_DEFAULT flagged as environment-diff' );
+is( $ed->{message}, 'defined in default but missing in production',
+    'environment-diff lists present/absent labels' );
+
+# two integers across envs -> no type-mismatch
+my $dir5 = File::Temp->newdir;
+open my $ec, '>', File::Spec->catfile( "$dir5", '.env' ) or die $!;
+print {$ec} "PORT=8080\n";
+close $ec;
+open my $edd, '>', File::Spec->catfile( "$dir5", '.env.production' ) or die $!;
+print {$edd} "PORT=9090\n";
+close $edd;
+open my $s5, '>', File::Spec->catfile( "$dir5", 'app.pl' ) or die $!;
+print {$s5} "\$ENV{PORT};\n";
+close $s5;
+my $f5 = App::Envdoctor::Scanner::scan("$dir5");
+ok( !( grep { $_->{rule} eq 'type-mismatch' } @$f5 ),
+    'two integers across envs -> no type-mismatch' );
