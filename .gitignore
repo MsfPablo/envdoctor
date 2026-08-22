@@ -9,6 +9,8 @@ coverage/
 !tests/fixtures/**/.env
 !tests/fixtures/**/.env.*
 
+# Java
+java/target/
 # Perl
 perl/blib/
 perl/Makefile
