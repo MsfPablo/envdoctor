@@ -113,6 +113,150 @@ func TestPublicPrefix(t *testing.T) {
 	}
 }
 
+func TestInferType(t *testing.T) {
+	cases := map[string]string{
+		"":          "empty",
+		"3000":      "integer",
+		"-7":        "integer",
+		"1.5":       "float",
+		"TRUE":      "boolean",
+		"https://x": "url",
+		`{"a":1}`:   "json",
+		"hello":     "string",
+	}
+	for in, want := range cases {
+		if got := InferType(in); got != want {
+			t.Fatalf("InferType(%q)=%q want %q", in, got, want)
+		}
+	}
+}
+
+func TestLevenshtein(t *testing.T) {
+	if Levenshtein("abc", "abc") != 0 {
+		t.Fatal("equal strings should be 0")
+	}
+	if Levenshtein("DATBASE_URL", "DATABASE_URL") != 1 {
+		t.Fatal("expected distance 1")
+	}
+}
+
+func TestWeakSecret(t *testing.T) {
+	dir := t.TempDir()
+	must(t, filepath.Join(dir, ".env"), "API_KEY=changeme\nSTRONG_TOKEN=s0m3-l0ng-r4nd0m\nSHORT_SECRET=abc\n")
+	must(t, filepath.Join(dir, "main.go"), "package main\nfunc main(){}\n")
+
+	res, err := Scan(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	weak := map[string]bool{}
+	for _, f := range res.Findings {
+		if f.Rule == "weak-secret" {
+			weak[f.Name] = true
+		}
+	}
+	if !weak["API_KEY"] {
+		t.Fatal("API_KEY (placeholder) should be weak")
+	}
+	if !weak["SHORT_SECRET"] {
+		t.Fatal("SHORT_SECRET (too short) should be weak")
+	}
+	if weak["STRONG_TOKEN"] {
+		t.Fatal("STRONG_TOKEN should not be weak")
+	}
+	// No value must leak into any message.
+	for _, f := range res.Findings {
+		if strings.Contains(f.Message, "changeme") || strings.Contains(f.Message, "s0m3") {
+			t.Fatalf("value leaked into message: %q", f.Message)
+		}
+	}
+}
+
+func TestTypoSuggestion(t *testing.T) {
+	dir := t.TempDir()
+	must(t, filepath.Join(dir, ".env"), "DATABASE_URL=postgres://x\n")
+	must(t, filepath.Join(dir, "main.go"), "package main\nimport \"os\"\nfunc main(){ os.Getenv(\"DATBASE_URL\") }\n")
+
+	res, err := Scan(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var typos []Finding
+	for _, f := range res.Findings {
+		if f.Rule == "typo" {
+			typos = append(typos, f)
+		}
+	}
+	if len(typos) != 1 || typos[0].Name != "DATBASE_URL" {
+		t.Fatalf("expected one typo for DATBASE_URL, got %v", typos)
+	}
+	if !strings.Contains(typos[0].Message, `did you mean "DATABASE_URL"`) {
+		t.Fatalf("unexpected message %q", typos[0].Message)
+	}
+	// undefined-in-source still fires too.
+	if !names(res.Errors())["DATBASE_URL"] {
+		t.Fatal("undefined-in-source should still fire for DATBASE_URL")
+	}
+}
+
+func TestEnvironmentDiff(t *testing.T) {
+	dir := t.TempDir()
+	must(t, filepath.Join(dir, ".env"), "SHARED=1\n")
+	must(t, filepath.Join(dir, ".env.production"), "SHARED=1\nONLY_PROD=1\n")
+	must(t, filepath.Join(dir, "main.go"), "package main\nfunc main(){}\n")
+
+	res, err := Scan(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	diffs := map[string]Finding{}
+	for _, f := range res.Findings {
+		if f.Rule == "environment-diff" {
+			diffs[f.Name] = f
+		}
+	}
+	f, ok := diffs["ONLY_PROD"]
+	if !ok {
+		t.Fatalf("expected ONLY_PROD diff, got %v", diffs)
+	}
+	if !strings.Contains(f.Message, "production") || !strings.Contains(f.Message, "default") {
+		t.Fatalf("unexpected diff message %q", f.Message)
+	}
+	if _, ok := diffs["SHARED"]; ok {
+		t.Fatal("SHARED present in both, should not diff")
+	}
+}
+
+func TestTypeMismatch(t *testing.T) {
+	dir := t.TempDir()
+	must(t, filepath.Join(dir, ".env"), "PORT=3000\nHOST=8080\n")
+	must(t, filepath.Join(dir, ".env.production"), "PORT=abc\nHOST=9090\n")
+	must(t, filepath.Join(dir, "main.go"), "package main\nfunc main(){}\n")
+
+	res, err := Scan(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mm := map[string]Finding{}
+	for _, f := range res.Findings {
+		if f.Rule == "type-mismatch" {
+			mm[f.Name] = f
+		}
+	}
+	if _, ok := mm["PORT"]; !ok {
+		t.Fatal("PORT should mismatch (integer vs string)")
+	}
+	if mm["PORT"].Severity != "error" {
+		t.Fatal("type-mismatch should be error")
+	}
+	if _, ok := mm["HOST"]; ok {
+		t.Fatal("HOST integer vs integer should not mismatch")
+	}
+	if strings.Contains(mm["PORT"].Message, "3000") || strings.Contains(mm["PORT"].Message, "abc") {
+		t.Fatal("value leaked into type-mismatch message")
+	}
+}
+
 func contains(s, sub string) bool { return strings.Contains(s, sub) }
 
 func must(t *testing.T, path, content string) {

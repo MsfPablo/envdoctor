@@ -19,6 +19,7 @@ pip install arun-envdoctor
 ```bash
 envdoctor scan --dir .        # audit; exit 1 on errors
 envdoctor scan --strict       # treat warnings as errors too
+envdoctor scan --json         # emit findings as a JSON array (no values)
 ```
 
 ## What it detects
@@ -33,17 +34,19 @@ then reports:
 | `undefined-in-source` | error | Used in code but not defined in any `.env` file |
 | `duplicates` | error | The same key is defined 2+ times within a single `.env` file |
 | `public-prefix` | error | A secret-looking variable is exposed to client bundles via a public prefix (`NEXT_PUBLIC_`, `VITE_`, `REACT_APP_`, `EXPO_PUBLIC_`, `GATSBY_`, `NUXT_PUBLIC_`, `VUE_APP_`, `PUBLIC_`) |
+| `type-mismatch` | error | A variable's value has incompatible inferred types across environments (e.g. `PORT=3000` vs `PORT=abc`) |
 | `unused` | warning | Defined in `.env` but never referenced in source |
+| `environment-diff` | warning | Defined in some environment files but missing from others |
+| `weak-secret` | warning | A secret-looking variable has a weak, empty, or placeholder value |
+| `typo` | warning | A used-but-undefined name closely matches a defined one (likely a typo) |
 
 Comments and docstrings are stripped before scanning, so documented examples
 don't cause false positives. Nothing is uploaded and variable **values** are
-never printed. `envdoctor scan` exits `1` when there are errors (or with
-`--strict`, warnings), making it CI-friendly.
-
-> This port implements the core missing/unused reconciliation plus the
-> `duplicates` and `public-prefix` detectors. Further detectors (type-mismatch,
-> schema validation, and more) currently live only in the
-> [Node reference implementation](https://github.com/arun-skg/envdoctor).
+never printed — they are used only for detection and never appear in any output
+(human or `--json`). `envdoctor scan` exits `1` when there are errors (or with
+`--strict`, warnings), making it CI-friendly. Pass `--json` to emit a JSON array
+of findings (each with `rule`, `severity`, `name`, `message`, `file`, `line`)
+for machine consumption.
 
 ## Library use
 
