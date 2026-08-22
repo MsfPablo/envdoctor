@@ -9,6 +9,9 @@ coverage/
 !tests/fixtures/**/.env
 !tests/fixtures/**/.env.*
 
+# PHP
+php/vendor/
+php/composer.lock
 # Ruby
 ruby/*.gem
 # Python build artifacts
