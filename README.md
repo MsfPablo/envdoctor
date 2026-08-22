@@ -19,6 +19,8 @@
 
 **Available for six ecosystems** — Node, Python, Go, Ruby, PHP, and Java — as [native ports](#native-ports), each installable from its own package manager.
 
+📖 **Documentation: [arun-skg.github.io/envdoctor](https://arun-skg.github.io/envdoctor/)** — full guides, per-language references, and examples.
+
 ### 📈 Download trends
 
 <a href="https://npm-stat.com/charts.html?package=%40arunskg%2Fenvdoctor">
