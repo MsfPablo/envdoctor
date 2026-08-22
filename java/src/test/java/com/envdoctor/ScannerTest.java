@@ -2,6 +2,8 @@ package com.envdoctor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -99,5 +101,111 @@ class ScannerTest {
                 .anyMatch(f -> f.rule().equals("undefined-in-source") && f.name().equals("DUP_KEY"));
         assertFalse(unused);
         assertFalse(undefined);
+    }
+
+    private static Scanner.Finding find(List<Scanner.Finding> fs, String rule, String name) {
+        return fs.stream().filter(f -> f.rule().equals(rule) && f.name().equals(name))
+                .findFirst().orElse(null);
+    }
+
+    @Test
+    void envLabelDerivation() {
+        assertEquals("default", Scanner.envLabel(".env"));
+        assertEquals("local", Scanner.envLabel(".env.local"));
+        assertEquals("production", Scanner.envLabel(".env.production"));
+        assertEquals("production", Scanner.envLabel(".env.production.local"));
+        assertNull(Scanner.envLabel(".env.example"));
+    }
+
+    @Test
+    void detectsWeakSecretAndTypoWithoutLeakingValues(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve(".env"),
+                "API_KEY=changeme\nSTRONG_TOKEN=a7Kf93ZqL0\nDATABASE_URL=postgres://localhost\n");
+        Files.writeString(dir.resolve("App.java"),
+                "class App { void m(){ System.getenv(\"API_KEY\"); System.getenv(\"STRONG_TOKEN\");"
+                        + " System.getenv(\"DATABASE_URL\"); System.getenv(\"DATBASE_URL\"); } }");
+
+        List<Scanner.Finding> f = Scanner.scan(dir);
+        Scanner.Finding weak = find(f, "weak-secret", "API_KEY");
+        assertNotNull(weak);
+        assertEquals("warning", weak.severity());
+        assertNull(find(f, "weak-secret", "STRONG_TOKEN"));
+
+        Scanner.Finding typo = find(f, "typo", "DATBASE_URL");
+        assertNotNull(typo);
+        assertEquals("\"DATBASE_URL\" is not defined; did you mean \"DATABASE_URL\"?", typo.message());
+        assertNotNull(find(f, "undefined-in-source", "DATBASE_URL"));
+
+        for (Scanner.Finding x : f) {
+            assertFalse(x.message().contains("changeme"));
+            assertFalse(x.message().contains("postgres"));
+            assertFalse(x.message().contains("a7Kf93ZqL0"));
+        }
+    }
+
+    @Test
+    void detectsTypeMismatchAndEnvironmentDiff(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve(".env"), "PORT=8080\nONLY_DEFAULT=1\n");
+        Files.writeString(dir.resolve(".env.production"), "PORT=high\n");
+        Files.writeString(dir.resolve("App.java"),
+                "class App { void m(){ System.getenv(\"PORT\"); System.getenv(\"ONLY_DEFAULT\"); } }");
+
+        List<Scanner.Finding> f = Scanner.scan(dir);
+        Scanner.Finding tm = find(f, "type-mismatch", "PORT");
+        assertNotNull(tm);
+        assertEquals("error", tm.severity());
+
+        Scanner.Finding ed = find(f, "environment-diff", "ONLY_DEFAULT");
+        assertNotNull(ed);
+        assertEquals("defined in default but missing in production", ed.message());
+    }
+
+    @Test
+    void twoIntegersAcrossEnvsIsNotMismatch(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve(".env"), "PORT=8080\n");
+        Files.writeString(dir.resolve(".env.production"), "PORT=9090\n");
+        Files.writeString(dir.resolve("App.java"),
+                "class App { void m(){ System.getenv(\"PORT\"); } }");
+
+        List<Scanner.Finding> f = Scanner.scan(dir);
+        assertNull(find(f, "type-mismatch", "PORT"));
+    }
+
+    @Test
+    void jsonShapeHasExactKeysAndNoValues(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve(".env"), "API_KEY=changeme\nPORT=8080\n");
+        Files.writeString(dir.resolve(".env.production"), "PORT=high\n");
+        Files.writeString(dir.resolve("App.java"),
+                "class App { void m(){ System.getenv(\"API_KEY\"); System.getenv(\"PORT\"); } }");
+
+        String json = Cli.toJson(Scanner.scan(dir));
+        assertTrue(json.startsWith("[") && json.endsWith("]"));
+        for (String key : List.of("\"rule\":", "\"severity\":", "\"name\":",
+                "\"message\":", "\"file\":", "\"line\":")) {
+            assertTrue(json.contains(key), "missing key " + key);
+        }
+        assertFalse(json.contains("changeme"));
+        assertFalse(json.contains("8080"));
+        assertFalse(json.contains("high"));
+    }
+
+    @Test
+    void findingsOrderErrorsBeforeWarnings(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve(".env"), "PORT=8080\nUNUSED_KEY=1\n");
+        Files.writeString(dir.resolve(".env.production"), "PORT=high\n");
+        Files.writeString(dir.resolve("App.java"),
+                "class App { void m(){ System.getenv(\"PORT\"); System.getenv(\"MISSING\"); } }");
+
+        List<Scanner.Finding> f = Scanner.scan(dir);
+        int lastError = -1;
+        int firstWarning = Integer.MAX_VALUE;
+        for (int i = 0; i < f.size(); i++) {
+            if (f.get(i).severity().equals("error")) {
+                lastError = i;
+            } else if (firstWarning == Integer.MAX_VALUE) {
+                firstWarning = i;
+            }
+        }
+        assertTrue(lastError < firstWarning);
     }
 }

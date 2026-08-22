@@ -22,6 +22,7 @@ cpanm App::Envdoctor
 ```bash
 envdoctor scan --dir .        # audit; exit 1 on errors
 envdoctor scan --strict       # treat warnings as errors too
+envdoctor scan --json         # machine-readable JSON array (no values)
 ```
 
 ## What it detects
@@ -34,16 +35,24 @@ Reconciles variables **used** in Perl source (`$ENV{X}`, `$ENV{'X'}`,
 | `undefined-in-source` | error | Used in code but not defined in any `.env` file |
 | `duplicates` | error | Same key defined 2+ times in a single `.env` file |
 | `public-prefix` | error | Secret-looking variable exposed to client bundles via a public prefix (`NEXT_PUBLIC_`, `VITE_`, `REACT_APP_`, …) |
+| `type-mismatch` | error | A variable's inferred value type differs across environments (e.g. integer in one `.env`, string in another) |
 | `unused` | warning | Defined in `.env` but never referenced in source |
+| `environment-diff` | warning | Defined in some environment files but missing from others |
+| `weak-secret` | warning | Secret-looking variable has a weak or placeholder value |
+| `typo` | warning | Used name closely matches a defined name (likely a misspelling) |
+
+Multiple `.env` files are grouped into environment labels by filename
+(`.env`→`default`, `.env.local`→`local`, `.env.production`→`production`,
+`.env.production.local`→`production`; `*.example` is skipped). Values are read
+only to power detection and are **never** printed in any output.
+
+Add `--json` to emit a JSON array of findings (keys `rule`, `severity`,
+`name`, `message`, `file`, `line`) instead of the human report; the exit code
+is unchanged.
 
 Line comments and POD blocks (`=pod … =cut`) are stripped before scanning.
-`scan` exits `1` on errors (or warnings with `--strict`). Values are never
-printed. Uses only core modules (`File::Find`, `File::Spec`, `Test::More`).
-
-> This port implements the core missing/unused reconciliation plus the
-> duplicates and public-prefix secret-leak detectors. The remaining detectors
-> (type-mismatch, schema validation, and more) currently live only in the
-> [Node reference implementation](https://github.com/arun-skg/envdoctor).
+`scan` exits `1` on errors (or warnings with `--strict`). Uses only core
+modules (`File::Find`, `File::Spec`, `JSON::PP`, `Test::More`).
 
 ## Development
 

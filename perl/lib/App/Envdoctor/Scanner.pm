@@ -45,7 +45,9 @@ sub scan_source {
 }
 
 # Collect ALL occurrences per key within a single file, in order.
-# Returns { KEY => [ line1, line2, ... ] }.
+# Returns { KEY => [ { line => N, value => V }, ... ] }.
+# The value (text right of the first '='; trimmed; one matching quote pair
+# stripped) is used ONLY for detection and is NEVER emitted in output.
 sub parse_env {
     my ( $path, $content ) = @_;
     my %def;
@@ -55,11 +57,103 @@ sub parse_env {
         my $t = $raw;
         $t =~ s/^\s+|\s+$//g;
         next if $t eq '' || $t =~ /^#/;
-        if ( $raw =~ /^\s*(?:export\s+)?([A-Za-z_]\w*)\s*=/ ) {
-            push @{ $def{$1} }, $i;
+        if ( $raw =~ /^\s*(?:export\s+)?([A-Za-z_]\w*)\s*=(.*)$/s ) {
+            my ( $key, $val ) = ( $1, $2 );
+            $val =~ s/^\s+|\s+$//g;
+            if ( length($val) >= 2
+                && ( ( substr( $val, 0, 1 ) eq '"' && substr( $val, -1 ) eq '"' )
+                    || ( substr( $val, 0, 1 ) eq "'" && substr( $val, -1 ) eq "'" ) ) )
+            {
+                $val = substr( $val, 1, length($val) - 2 );
+            }
+            push @{ $def{$key} }, { line => $i, value => $val };
         }
     }
     return \%def;
+}
+
+# Derive an env label from a .env filename. Returns undef for *.example.
+sub env_label {
+    my ($name) = @_;
+    return undef if $name =~ /\.example$/;
+    return 'default' if $name eq '.env';
+    return undef unless $name =~ /^\.env\.(.+)$/;
+    my $x = $1;
+    $x =~ s/\.local$// if $x ne 'local';
+    return $x;
+}
+
+# Infer a coarse type from a value string.
+sub infer_type {
+    my ($v) = @_;
+    return 'empty'   if $v eq '';
+    return 'integer' if $v =~ /^-?\d+$/;
+    return 'float'   if $v =~ /^-?\d+\.\d+$/;
+    return 'boolean' if $v =~ /^(?:true|false)$/i;
+    return 'url'     if $v =~ m{^https?://};
+    if ( $v =~ /^[\{\[]/ ) {
+        require JSON::PP;
+        my $ok = eval { JSON::PP::decode_json($v); 1 };
+        return 'json' if $ok;
+    }
+    return 'string';
+}
+
+# Compatibility group for a non-empty inferred type.
+sub _type_group {
+    my ($t) = @_;
+    return 'numeric' if $t eq 'integer' || $t eq 'float';
+    return $t;
+}
+
+my $SECRET_NAME = qr/SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE|CREDENTIAL|API_?KEY|ACCESS_?KEY|AUTH/i;
+my $WEAK_VALUE
+    = qr/^(?:changeme|change_me|placeholder|x{3,}|todo|secret|password|passwd|test|example|sample|dummy|your[_-].*|<.*>|\$\{.*\})$/i;
+
+sub _is_weak_secret {
+    my ($v) = @_;
+    return 1 if $v eq '' || length($v) < 8;
+    return $v =~ $WEAK_VALUE ? 1 : 0;
+}
+
+# Levenshtein edit distance.
+sub levenshtein {
+    my ( $a, $b ) = @_;
+    my @a = split //, $a;
+    my @b = split //, $b;
+    my @d = ( 0 .. @b );
+    for my $i ( 1 .. @a ) {
+        my $prev = $d[0];
+        $d[0] = $i;
+        for my $j ( 1 .. @b ) {
+            my $tmp  = $d[$j];
+            my $cost = ( $a[ $i - 1 ] eq $b[ $j - 1 ] ) ? 0 : 1;
+            my $min  = $d[ $j - 1 ] + 1;
+            $min = $d[$j] + 1     if $d[$j] + 1 < $min;
+            $min = $prev + $cost  if $prev + $cost < $min;
+            $d[$j] = $min;
+            $prev  = $tmp;
+        }
+    }
+    return $d[-1];
+}
+
+# Best typo suggestion for an undefined used name among defined names.
+sub _typo_suggestion {
+    my ( $u, $defined ) = @_;
+    my ( $best, $best_dist );
+    for my $d ( sort @$defined ) {
+        next if $d eq $u;
+        my $min_len = length($u) < length($d) ? length($u) : length($d);
+        my $thresh  = $min_len <= 4 ? 1 : 2;
+        my $dist    = levenshtein( $u, $d );
+        next if $dist > $thresh;
+        if ( !defined $best_dist || $dist < $best_dist ) {
+            $best_dist = $dist;
+            $best      = $d;
+        }
+    }
+    return $best;
 }
 
 my @PUBLIC_PREFIXES = qw(
@@ -119,22 +213,31 @@ sub _find_files {
 sub scan {
     my ($root) = @_;
     my ( %def, %used, @dupes );
+    my %labels_by_var;    # var => { label => value }
+    my %all_labels;       # every env label present in the project
 
     for my $f ( _find_files( $root, 'env' ) ) {
         my $rel = _rel( $root, $f );
+        my ( undef, undef, $base ) = File::Spec->splitpath($f);
+        my $label = env_label($base);
+        next unless defined $label;    # skip *.example
+        $all_labels{$label} = 1;
         my $d = parse_env( $rel, _read($f) );
         for my $key ( keys %$d ) {
-            my @lines = @{ $d->{$key} };
+            my @occ   = @{ $d->{$key} };
+            my @lines = map { $_->{line} } @occ;
             # First occurrence counts as the definition for reconciliation.
-            $def{$key} //= { file => $rel, line => $lines[0] };
-            if ( @lines >= 2 ) {
+            $def{$key} //= { file => $rel, line => $lines[0], value => $occ[0]{value} };
+            # First value seen for this (var, label) pair.
+            $labels_by_var{$key}{$label} //= $occ[0]{value};
+            if ( @occ >= 2 ) {
                 push @dupes,
                     {
                     rule     => 'duplicates',
                     severity => 'error',
                     name     => $key,
                     message  => 'defined '
-                        . scalar(@lines)
+                        . scalar(@occ)
                         . ' times in the same file (lines '
                         . join( ', ', @lines ) . ')',
                     origin => { file => $rel, line => $lines[0] },
@@ -147,10 +250,13 @@ sub scan {
         $used{$_} //= $u->{$_} for keys %$u;
     }
 
-    my @findings;
+    my @defined_names = keys %def;
+    my $n_labels      = scalar keys %all_labels;
+
+    my @errors_undef;
     for my $name ( sort keys %used ) {
         next if exists $def{$name};
-        push @findings,
+        push @errors_undef,
             {
             rule     => 'undefined-in-source',
             severity => 'error',
@@ -159,31 +265,110 @@ sub scan {
             origin   => $used{$name},
             };
     }
-    for my $f ( sort { $a->{name} cmp $b->{name} } @dupes ) {
-        push @findings, $f;
-    }
-    for my $name ( sort keys %def ) {
-        next unless _is_public_secret($name);
-        push @findings,
+
+    my @errors_typemismatch;
+    for my $name ( sort keys %labels_by_var ) {
+        my %vals = %{ $labels_by_var{$name} };
+        next unless keys %vals >= 2;
+        my %groups;
+        for my $v ( values %vals ) {
+            my $t = infer_type($v);
+            next if $t eq 'empty';
+            $groups{ _type_group($t) } = 1;
+        }
+        next unless keys %groups >= 2;
+        push @errors_typemismatch,
             {
-            rule     => 'public-prefix',
+            rule     => 'type-mismatch',
             severity => 'error',
             name     => $name,
-            message  => 'secret-looking variable is exposed to client bundles via a public prefix',
-            origin   => $def{$name},
+            message  => 'inferred type differs across environments',
+            origin   => { file => $def{$name}{file}, line => $def{$name}{line} },
             };
     }
+
+    my @warn_unused;
     for my $name ( sort keys %def ) {
         next if exists $used{$name};
-        push @findings,
+        push @warn_unused,
             {
             rule     => 'unused',
             severity => 'warning',
             name     => $name,
             message  => 'defined but never referenced in source',
-            origin   => $def{$name},
+            origin   => { file => $def{$name}{file}, line => $def{$name}{line} },
             };
     }
+
+    my @warn_envdiff;
+    if ( $n_labels >= 2 ) {
+        for my $name ( sort keys %labels_by_var ) {
+            my @present = sort keys %{ $labels_by_var{$name} };
+            my %have    = map { $_ => 1 } @present;
+            my @absent  = sort grep { !$have{$_} } keys %all_labels;
+            next unless @present && @absent;
+            push @warn_envdiff,
+                {
+                rule     => 'environment-diff',
+                severity => 'warning',
+                name     => $name,
+                message  => 'defined in '
+                    . join( ', ', @present )
+                    . ' but missing in '
+                    . join( ', ', @absent ),
+                origin => { file => $def{$name}{file}, line => $def{$name}{line} },
+                };
+        }
+    }
+
+    my @warn_weak;
+    for my $name ( sort keys %def ) {
+        next unless $name =~ $SECRET_NAME;
+        next unless _is_weak_secret( $def{$name}{value} );
+        push @warn_weak,
+            {
+            rule     => 'weak-secret',
+            severity => 'warning',
+            name     => $name,
+            message  => 'secret-looking variable has a weak or placeholder value',
+            origin   => { file => $def{$name}{file}, line => $def{$name}{line} },
+            };
+    }
+
+    my @warn_typo;
+    for my $name ( sort keys %used ) {
+        next if exists $def{$name};
+        my $d = _typo_suggestion( $name, \@defined_names );
+        next unless defined $d;
+        push @warn_typo,
+            {
+            rule     => 'typo',
+            severity => 'warning',
+            name     => $name,
+            message  => qq{"$name" is not defined; did you mean "$d"?},
+            origin   => $used{$name},
+            };
+    }
+
+    my @public_prefix = map {
+        {   rule     => 'public-prefix',
+            severity => 'error',
+            name     => $_,
+            message  => 'secret-looking variable is exposed to client bundles via a public prefix',
+            origin   => { file => $def{$_}{file}, line => $def{$_}{line} },
+        }
+    } sort grep { _is_public_secret($_) } keys %def;
+
+    my @findings = (
+        @errors_undef,
+        ( sort { $a->{name} cmp $b->{name} } @dupes ),
+        @public_prefix,
+        @errors_typemismatch,
+        @warn_unused,
+        @warn_envdiff,
+        @warn_weak,
+        @warn_typo,
+    );
     return \@findings;
 }
 

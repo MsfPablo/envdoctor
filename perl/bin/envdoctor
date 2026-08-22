@@ -8,6 +8,7 @@ use Cwd ();
 
 my $dir    = '.';
 my $strict = 0;
+my $json   = 0;
 my @args   = @ARGV;
 shift @args if @args && $args[0] eq 'scan';
 while (@args) {
@@ -15,12 +16,28 @@ while (@args) {
     if ( $a eq '-d' || $a eq '--dir' ) { $dir = shift @args // '.'; }
     elsif ( $a =~ /^--dir=(.*)$/ )     { $dir = $1; }
     elsif ( $a eq '--strict' )         { $strict = 1; }
+    elsif ( $a eq '--json' )           { $json   = 1; }
 }
 
 my $root     = Cwd::abs_path($dir) // $dir;
 my $findings = App::Envdoctor::Scanner::scan($root);
 my @errors   = grep { $_->{severity} eq 'error' } @$findings;
 my @warnings = grep { $_->{severity} eq 'warning' } @$findings;
+
+if ($json) {
+    require JSON::PP;
+    my @rows = map {
+        {   rule     => $_->{rule},
+            severity => $_->{severity},
+            name     => $_->{name},
+            message  => $_->{message},
+            file     => $_->{origin}{file},
+            line     => $_->{origin}{line},
+        }
+    } @$findings;
+    print JSON::PP->new->canonical->encode( \@rows ), "\n";
+    exit( ( @errors || ( $strict && @warnings ) ) ? 1 : 0 );
+}
 
 print "ENVIRONMENT AUDIT\n";
 print '=' x 40, "\n";
