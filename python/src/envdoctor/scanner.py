@@ -26,6 +26,24 @@ _LINE_COMMENT = re.compile(r"#[^\n]*")
 
 _ENV_LINE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_]\w*)\s*=")
 
+# Public/client-exposed environment prefixes (case-sensitive, exact).
+_PUBLIC_PREFIXES = (
+    "NEXT_PUBLIC_",
+    "VITE_",
+    "REACT_APP_",
+    "EXPO_PUBLIC_",
+    "GATSBY_",
+    "NUXT_PUBLIC_",
+    "VUE_APP_",
+    "PUBLIC_",
+)
+
+# Secret-looking name pattern (case-insensitive).
+_SECRET_NAME = re.compile(
+    r"SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE|CREDENTIAL|API_?KEY|ACCESS_?KEY|AUTH",
+    re.IGNORECASE,
+)
+
 
 @dataclass
 class Origin:
@@ -66,16 +84,20 @@ def _strip_noise(code: str) -> str:
     return code
 
 
-def parse_env_file(path: Path) -> dict[str, Origin]:
-    """Return ``{NAME: Origin}`` for the definitions in a dotenv file."""
-    defined: dict[str, Origin] = {}
+def parse_env_file(path: Path) -> dict[str, list[Origin]]:
+    """Return ``{NAME: [Origin, ...]}`` for every definition in a dotenv file.
+
+    All occurrences of a key are collected (in file order) so callers can both
+    reconcile against the first occurrence and detect in-file duplicates.
+    """
+    defined: dict[str, list[Origin]] = {}
     for lineno, raw in enumerate(path.read_text().splitlines(), start=1):
         stripped = raw.strip()
         if not stripped or stripped.startswith("#"):
             continue
         match = _ENV_LINE.match(raw)
         if match:
-            defined.setdefault(match.group(1), Origin(path, lineno))
+            defined.setdefault(match.group(1), []).append(Origin(path, lineno))
     return defined
 
 
@@ -113,8 +135,27 @@ def discover_source_files(root: Path, extensions: Iterable[str] = ("py",)) -> li
 def scan(root: Path, extensions: Iterable[str] = ("py",)) -> ScanResult:
     """Reconcile dotenv definitions against source usage under ``root``."""
     defined: dict[str, Origin] = {}
+    duplicates: list[Finding] = []
     for env_file in discover_env_files(root):
-        defined.update(parse_env_file(env_file))
+        for name, origins in parse_env_file(env_file).items():
+            # First occurrence (across all files) counts as the definition.
+            if name not in defined:
+                defined[name] = origins[0]
+            # Duplicate within a single file: 2+ occurrences of the same key.
+            if len(origins) >= 2:
+                lines = ", ".join(str(o.line) for o in origins)
+                duplicates.append(
+                    Finding(
+                        rule="duplicates",
+                        severity="error",
+                        name=name,
+                        message=(
+                            f"defined {len(origins)} times in the same file "
+                            f"(lines {lines})"
+                        ),
+                        origin=origins[0],
+                    )
+                )
 
     used: dict[str, Origin] = {}
     for src in discover_source_files(root, extensions):
@@ -133,6 +174,26 @@ def scan(root: Path, extensions: Iterable[str] = ("py",)) -> ScanResult:
                     name=name,
                     message="used in source code but not defined in any environment file",
                     origin=used[name],
+                )
+            )
+
+    # duplicates: same key defined 2+ times within a single .env file.
+    for finding in sorted(duplicates, key=lambda f: f.name):
+        result.findings.append(finding)
+
+    # public-prefix: secret-looking var exposed to client bundles.
+    for name in sorted(defined):
+        if name.startswith(_PUBLIC_PREFIXES) and _SECRET_NAME.search(name):
+            result.findings.append(
+                Finding(
+                    rule="public-prefix",
+                    severity="error",
+                    name=name,
+                    message=(
+                        "secret-looking variable is exposed to client bundles "
+                        "via a public prefix"
+                    ),
+                    origin=defined[name],
                 )
             )
 
