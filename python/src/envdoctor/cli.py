@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
-from .scanner import ScanResult, scan
+from .scanner import ScanResult, finding_to_dict, scan
 
 _RED = "\033[31m"
 _YELLOW = "\033[33m"
@@ -58,6 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     scan_cmd.add_argument("-d", "--dir", default=".", help="Project root (default: cwd)")
     scan_cmd.add_argument("--strict", action="store_true", help="Treat warnings as errors")
     scan_cmd.add_argument("--no-color", action="store_true", help="Disable ANSI color")
+    scan_cmd.add_argument("--json", action="store_true", help="Emit findings as JSON")
     args = parser.parse_args(argv)
 
     if args.command != "scan":
@@ -66,8 +68,11 @@ def main(argv: list[str] | None = None) -> int:
 
     root = Path(args.dir).resolve()
     result = scan(root)
-    use_color = not args.no_color and sys.stdout.isatty()
-    print(format_report(result, root, use_color))
+    if args.json:
+        print(json.dumps([finding_to_dict(f, root) for f in result.findings]))
+    else:
+        use_color = not args.no_color and sys.stdout.isatty()
+        print(format_report(result, root, use_color))
 
     if result.errors or (args.strict and result.warnings):
         return 1
