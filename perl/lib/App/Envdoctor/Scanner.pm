@@ -44,6 +44,8 @@ sub scan_source {
     return \%used;
 }
 
+# Collect ALL occurrences per key within a single file, in order.
+# Returns { KEY => [ line1, line2, ... ] }.
 sub parse_env {
     my ( $path, $content ) = @_;
     my %def;
@@ -54,10 +56,27 @@ sub parse_env {
         $t =~ s/^\s+|\s+$//g;
         next if $t eq '' || $t =~ /^#/;
         if ( $raw =~ /^\s*(?:export\s+)?([A-Za-z_]\w*)\s*=/ ) {
-            $def{$1} //= { file => $path, line => $i };
+            push @{ $def{$1} }, $i;
         }
     }
     return \%def;
+}
+
+my @PUBLIC_PREFIXES = qw(
+    NEXT_PUBLIC_ VITE_ REACT_APP_ EXPO_PUBLIC_
+    GATSBY_ NUXT_PUBLIC_ VUE_APP_ PUBLIC_
+);
+
+sub _is_public_secret {
+    my ($name) = @_;
+    my $has_prefix = 0;
+    for my $p (@PUBLIC_PREFIXES) {
+        if ( index( $name, $p ) == 0 ) { $has_prefix = 1; last; }
+    }
+    return 0 unless $has_prefix;
+    return $name =~ /SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE|CREDENTIAL|API_?KEY|ACCESS_?KEY|AUTH/i
+        ? 1
+        : 0;
 }
 
 sub _read {
@@ -99,11 +118,29 @@ sub _find_files {
 
 sub scan {
     my ($root) = @_;
-    my ( %def, %used );
+    my ( %def, %used, @dupes );
 
     for my $f ( _find_files( $root, 'env' ) ) {
-        my $d = parse_env( _rel( $root, $f ), _read($f) );
-        $def{$_} //= $d->{$_} for keys %$d;
+        my $rel = _rel( $root, $f );
+        my $d = parse_env( $rel, _read($f) );
+        for my $key ( keys %$d ) {
+            my @lines = @{ $d->{$key} };
+            # First occurrence counts as the definition for reconciliation.
+            $def{$key} //= { file => $rel, line => $lines[0] };
+            if ( @lines >= 2 ) {
+                push @dupes,
+                    {
+                    rule     => 'duplicates',
+                    severity => 'error',
+                    name     => $key,
+                    message  => 'defined '
+                        . scalar(@lines)
+                        . ' times in the same file (lines '
+                        . join( ', ', @lines ) . ')',
+                    origin => { file => $rel, line => $lines[0] },
+                    };
+            }
+        }
     }
     for my $f ( _find_files( $root, 'perl' ) ) {
         my $u = scan_source( _rel( $root, $f ), _read($f) );
@@ -120,6 +157,20 @@ sub scan {
             name     => $name,
             message  => 'used in source code but not defined in any environment file',
             origin   => $used{$name},
+            };
+    }
+    for my $f ( sort { $a->{name} cmp $b->{name} } @dupes ) {
+        push @findings, $f;
+    }
+    for my $name ( sort keys %def ) {
+        next unless _is_public_secret($name);
+        push @findings,
+            {
+            rule     => 'public-prefix',
+            severity => 'error',
+            name     => $name,
+            message  => 'secret-looking variable is exposed to client bundles via a public prefix',
+            origin   => $def{$name},
             };
     }
     for my $name ( sort keys %def ) {

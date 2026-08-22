@@ -74,9 +74,31 @@ public final class Scanner {
         return used;
     }
 
-    /** Map of variable name to line for definitions in a dotenv file. */
-    public static Map<String, Integer> parseEnv(String content) {
-        Map<String, Integer> defined = new LinkedHashMap<>();
+    private static final String[] PUBLIC_PREFIXES = {
+        "NEXT_PUBLIC_", "VITE_", "REACT_APP_", "EXPO_PUBLIC_",
+        "GATSBY_", "NUXT_PUBLIC_", "VUE_APP_", "PUBLIC_"
+    };
+    private static final Pattern SECRET_NAME = Pattern.compile(
+            "SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE|CREDENTIAL|API_?KEY|ACCESS_?KEY|AUTH",
+            Pattern.CASE_INSENSITIVE);
+
+    private static boolean isPublicSecret(String name) {
+        boolean hasPrefix = false;
+        for (String p : PUBLIC_PREFIXES) {
+            if (name.startsWith(p)) {
+                hasPrefix = true;
+                break;
+            }
+        }
+        return hasPrefix && SECRET_NAME.matcher(name).find();
+    }
+
+    /**
+     * Collect ALL occurrences per key within a single dotenv file, in order.
+     * Map of variable name to the list of line numbers where it is defined.
+     */
+    public static Map<String, List<Integer>> parseEnv(String content) {
+        Map<String, List<Integer>> defined = new LinkedHashMap<>();
         String[] lines = content.split("\n", -1);
         for (int i = 0; i < lines.length; i++) {
             String trimmed = lines[i].strip();
@@ -85,7 +107,7 @@ public final class Scanner {
             }
             Matcher m = ENV_LINE.matcher(lines[i]);
             if (m.find()) {
-                defined.putIfAbsent(m.group(1), i + 1);
+                defined.computeIfAbsent(m.group(1), k -> new ArrayList<>()).add(i + 1);
             }
         }
         return defined;
@@ -97,6 +119,7 @@ public final class Scanner {
         Map<String, Integer> definedLine = new LinkedHashMap<>();
         Map<String, String> usedFile = new LinkedHashMap<>();
         Map<String, Integer> usedLine = new LinkedHashMap<>();
+        List<Finding> duplicates = new ArrayList<>();
 
         try (Stream<Path> walk = Files.walk(root)) {
             walk.filter(Files::isRegularFile)
@@ -113,9 +136,18 @@ public final class Scanner {
                     String content = read(path);
                     String rel = root.relativize(path).toString();
                     if (isEnv) {
-                        parseEnv(content).forEach((k, ln) -> {
+                        parseEnv(content).forEach((k, lns) -> {
+                            // First occurrence counts as the definition.
                             definedFile.putIfAbsent(k, rel);
-                            definedLine.putIfAbsent(k, ln);
+                            definedLine.putIfAbsent(k, lns.get(0));
+                            if (lns.size() >= 2) {
+                                String joined = lns.stream().map(String::valueOf)
+                                        .collect(java.util.stream.Collectors.joining(", "));
+                                duplicates.add(new Finding("duplicates", "error", k,
+                                        "defined " + lns.size()
+                                                + " times in the same file (lines " + joined + ")",
+                                        rel, lns.get(0)));
+                            }
                         });
                     } else {
                         scanSource(content).forEach((k, ln) -> {
@@ -134,6 +166,15 @@ public final class Scanner {
                 findings.add(new Finding("undefined-in-source", "error", name,
                         "used in source code but not defined in any environment file",
                         usedFile.get(name), usedLine.get(name)));
+            }
+        }
+        duplicates.sort((a, b) -> a.name().compareTo(b.name()));
+        findings.addAll(duplicates);
+        for (String name : new TreeSet<>(definedFile.keySet())) {
+            if (isPublicSecret(name)) {
+                findings.add(new Finding("public-prefix", "error", name,
+                        "secret-looking variable is exposed to client bundles via a public prefix",
+                        definedFile.get(name), definedLine.get(name)));
             }
         }
         for (String name : new TreeSet<>(definedFile.keySet())) {
