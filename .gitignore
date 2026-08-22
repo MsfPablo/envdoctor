@@ -9,6 +9,8 @@ coverage/
 !tests/fixtures/**/.env
 !tests/fixtures/**/.env.*
 
+# Ruby
+ruby/*.gem
 # Python build artifacts
 python/build/
 python/dist/
