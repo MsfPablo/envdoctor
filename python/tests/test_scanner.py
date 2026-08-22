@@ -43,6 +43,37 @@ def test_missing_and_unused(tmp_path):
     assert "DB_URL" not in errors and "DB_URL" not in warnings  # reconciled
 
 
+def test_duplicates(tmp_path):
+    _write(tmp_path, ".env", "DB_URL=a\nDB_URL=b\nSOLO=1\n")
+    _write(tmp_path, "app.py", "import os\nos.getenv('DB_URL')\nos.getenv('SOLO')\n")
+
+    result = scan(tmp_path)
+    dups = [f for f in result.findings if f.rule == "duplicates"]
+    assert len(dups) == 1
+    assert dups[0].name == "DB_URL"
+    assert dups[0].severity == "error"
+    assert "lines 1, 2" in dups[0].message
+    # Single-definition key is not reported as a duplicate.
+    assert "SOLO" not in {f.name for f in dups}
+    # First occurrence still reconciles: DB_URL is not undefined/unused.
+    assert "DB_URL" not in {f.name for f in result.warnings}
+
+
+def test_public_prefix(tmp_path):
+    _write(
+        tmp_path,
+        ".env",
+        "NEXT_PUBLIC_API_KEY=x\nPUBLIC_URL=x\nAPI_KEY=x\n",
+    )
+    result = scan(tmp_path)
+    pp = [f for f in result.findings if f.rule == "public-prefix"]
+    names = {f.name for f in pp}
+    assert names == {"NEXT_PUBLIC_API_KEY"}
+    assert pp[0].severity == "error"
+    assert "PUBLIC_URL" not in names  # public prefix but not secret-like
+    assert "API_KEY" not in names  # secret-like but no public prefix
+
+
 def test_clean_project_has_no_findings(tmp_path):
     _write(tmp_path, ".env", "DB_URL=x\n")
     _write(tmp_path, "app.py", "import os\nos.getenv('DB_URL')\n")
