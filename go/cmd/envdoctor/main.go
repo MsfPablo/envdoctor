@@ -2,6 +2,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -13,10 +14,36 @@ func main() {
 	os.Exit(run(os.Args[1:]))
 }
 
+// jsonFinding is the exact serialization shape. Values are never included.
+type jsonFinding struct {
+	Rule     string  `json:"rule"`
+	Severity string  `json:"severity"`
+	Name     string  `json:"name"`
+	Message  string  `json:"message"`
+	File     *string `json:"file"`
+	Line     *int    `json:"line"`
+}
+
+func toJSON(findings []scanner.Finding) []jsonFinding {
+	out := make([]jsonFinding, 0, len(findings))
+	for _, f := range findings {
+		jf := jsonFinding{Rule: f.Rule, Severity: f.Severity, Name: f.Name, Message: f.Message}
+		if f.Origin.File != "" {
+			file := f.Origin.File
+			line := f.Origin.Line
+			jf.File = &file
+			jf.Line = &line
+		}
+		out = append(out, jf)
+	}
+	return out
+}
+
 func run(args []string) int {
 	fs := flag.NewFlagSet("envdoctor", flag.ExitOnError)
 	dir := fs.String("dir", ".", "Project root (default: cwd)")
 	strict := fs.Bool("strict", false, "Treat warnings as errors")
+	asJSON := fs.Bool("json", false, "Emit findings as JSON")
 
 	// Support "envdoctor scan [flags]".
 	if len(args) > 0 && args[0] == "scan" {
@@ -30,10 +57,24 @@ func run(args []string) int {
 		return 2
 	}
 
-	fmt.Println("ENVIRONMENT AUDIT")
-	fmt.Println("========================================")
 	errs := res.Errors()
 	warns := res.Warnings()
+
+	if *asJSON {
+		data, mErr := json.Marshal(toJSON(res.Findings))
+		if mErr != nil {
+			fmt.Fprintln(os.Stderr, "envdoctor: "+mErr.Error())
+			return 2
+		}
+		fmt.Println(string(data))
+		if len(errs) > 0 || (*strict && len(warns) > 0) {
+			return 1
+		}
+		return 0
+	}
+
+	fmt.Println("ENVIRONMENT AUDIT")
+	fmt.Println("========================================")
 	if len(res.Findings) == 0 {
 		fmt.Println("\nNo issues found.")
 		return 0
