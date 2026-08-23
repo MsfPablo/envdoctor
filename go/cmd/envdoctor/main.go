@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/arun-skg/envdoctor/go/internal/scanner"
@@ -117,6 +118,73 @@ func runSync(args []string) int {
 	return 0
 }
 
+// parseGen extracts the shared flags for init/fix.
+func parseGen(args []string) (dir string, force bool) {
+	dir = "."
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "-d" || a == "--dir":
+			if i+1 < len(args) {
+				i++
+				dir = args[i]
+			}
+		case strings.HasPrefix(a, "--dir="):
+			dir = a[len("--dir="):]
+		case a == "--force":
+			force = true
+		}
+	}
+	return
+}
+
+func runInit(args []string) int {
+	dir, force := parseGen(args)
+	docs, err := scanner.GenerateDocs(dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "envdoctor: "+err.Error())
+		return 2
+	}
+	for _, name := range scanner.GeneratedFiles {
+		target := filepath.Join(dir, name)
+		if force {
+			if werr := os.WriteFile(target, []byte(docs[name]), 0o644); werr != nil {
+				fmt.Fprintln(os.Stderr, "envdoctor: "+werr.Error())
+				return 2
+			}
+			fmt.Printf("wrote %s\n", name)
+			continue
+		}
+		if _, serr := os.Stat(target); serr == nil {
+			fmt.Printf("skipped %s (exists)\n", name)
+			continue
+		}
+		if werr := os.WriteFile(target, []byte(docs[name]), 0o644); werr != nil {
+			fmt.Fprintln(os.Stderr, "envdoctor: "+werr.Error())
+			return 2
+		}
+		fmt.Printf("created %s\n", name)
+	}
+	return 0
+}
+
+func runFix(args []string) int {
+	dir, _ := parseGen(args)
+	docs, err := scanner.GenerateDocs(dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "envdoctor: "+err.Error())
+		return 2
+	}
+	for _, name := range scanner.GeneratedFiles {
+		if werr := os.WriteFile(filepath.Join(dir, name), []byte(docs[name]), 0o644); werr != nil {
+			fmt.Fprintln(os.Stderr, "envdoctor: "+werr.Error())
+			return 2
+		}
+		fmt.Printf("wrote %s\n", name)
+	}
+	return 0
+}
+
 func main() {
 	os.Exit(run(os.Args[1:]))
 }
@@ -152,6 +220,12 @@ func run(args []string) int {
 	}
 	if len(args) > 0 && args[0] == "sync" {
 		return runSync(args[1:])
+	}
+	if len(args) > 0 && args[0] == "init" {
+		return runInit(args[1:])
+	}
+	if len(args) > 0 && args[0] == "fix" {
+		return runFix(args[1:])
 	}
 
 	fs := flag.NewFlagSet("envdoctor", flag.ExitOnError)
