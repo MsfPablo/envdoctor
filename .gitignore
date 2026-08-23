@@ -32,6 +32,13 @@ __pycache__/
 # Go
 go/envdoctor
 
+# Rust
+rust/target/
+
+# Generated downloads chart artifacts (published to the npm-downloads branch)
+/downloads.svg
+/downloads.json
+
 # Perl dist artifacts
 perl/App-Envdoctor-*
 perl/MYMETA.*
