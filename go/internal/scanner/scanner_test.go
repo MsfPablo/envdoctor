@@ -257,6 +257,76 @@ func TestTypeMismatch(t *testing.T) {
 	}
 }
 
+func TestInfraSourcesScanned(t *testing.T) {
+	dir := t.TempDir()
+	must(t, filepath.Join(dir, ".env"), "DB_URL=postgres://x\n")
+	must(t, filepath.Join(dir, "docker-compose.yml"),
+		"services:\n  web:\n    image: x\n    environment:\n      - TOKEN=${COMPOSE_SECRET}\n      - DB=${DB_URL}\n")
+	wfDir := filepath.Join(dir, ".github", "workflows")
+	if err := os.MkdirAll(wfDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	must(t, filepath.Join(wfDir, "ci.yml"),
+		"jobs:\n  build:\n    steps:\n      - run: deploy\n        env:\n          KEY: ${{ secrets.DEPLOY_KEY }}\n          REGION: ${{ vars.REGION }}\n")
+	k8sDir := filepath.Join(dir, "k8s")
+	if err := os.MkdirAll(k8sDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	must(t, filepath.Join(k8sDir, "deploy.yaml"),
+		"apiVersion: apps/v1\nkind: Deployment\nspec:\n  value: ${K8S_VAR}\n")
+
+	res, err := Scan(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	undefined := map[string]bool{}
+	for _, f := range res.Findings {
+		if f.Rule == "undefined-in-source" {
+			undefined[f.Name] = true
+			if f.Message != "referenced but not defined in any environment file" {
+				t.Fatalf("unexpected message %q", f.Message)
+			}
+		}
+	}
+	for _, name := range []string{"COMPOSE_SECRET", "DEPLOY_KEY", "REGION", "K8S_VAR"} {
+		if !undefined[name] {
+			t.Fatalf("expected %s referenced-but-undefined, got %v", name, undefined)
+		}
+	}
+	// DB_URL is defined and referenced in compose -> not unused.
+	for _, f := range res.Findings {
+		if f.Rule == "unused" && f.Name == "DB_URL" {
+			t.Fatal("DB_URL should be reconciled via compose reference")
+		}
+	}
+	// No values leak.
+	for _, f := range res.Findings {
+		if strings.Contains(f.Message, "postgres") {
+			t.Fatalf("value leaked: %q", f.Message)
+		}
+	}
+}
+
+func TestScanInfraActionsAndEscaping(t *testing.T) {
+	// $$ is escaped and must not yield a variable reference.
+	used := ScanInfra("compose.yml", "a: $$NOT_VAR\nb: ${REAL_VAR}\n", "compose")
+	if _, ok := used["NOT_VAR"]; ok {
+		t.Fatal("escaped $$ should not produce a reference")
+	}
+	if _, ok := used["REAL_VAR"]; !ok {
+		t.Fatal("expected REAL_VAR")
+	}
+	// Actions secret/var/env refs only apply to actions kind.
+	compose := ScanInfra("compose.yml", "x: ${{ secrets.ONLY_ACTIONS }}\n", "compose")
+	if _, ok := compose["ONLY_ACTIONS"]; ok {
+		t.Fatal("secrets. ref should not match for compose kind")
+	}
+	actions := ScanInfra("ci.yml", "x: ${{ secrets.ONLY_ACTIONS }}\n", "actions")
+	if _, ok := actions["ONLY_ACTIONS"]; !ok {
+		t.Fatal("secrets. ref should match for actions kind")
+	}
+}
+
 func contains(s, sub string) bool { return strings.Contains(s, sub) }
 
 func must(t *testing.T, path, content string) {
