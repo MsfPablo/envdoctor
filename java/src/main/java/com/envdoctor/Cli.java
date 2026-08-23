@@ -20,6 +20,12 @@ public final class Cli {
         if (args.length > 0 && args[0].equals("sync")) {
             return runSync(args);
         }
+        if (args.length > 0 && args[0].equals("init")) {
+            return runInit(args);
+        }
+        if (args.length > 0 && args[0].equals("fix")) {
+            return runFix(args);
+        }
 
         String dir = ".";
         boolean strict = false;
@@ -156,6 +162,65 @@ public final class Cli {
             System.out.println("  + " + k);
         }
         return 0;
+    }
+
+    private static String generateDir(String[] args) {
+        String dir = ".";
+        for (int i = 1; i < args.length; i++) {
+            String a = args[i];
+            if ((a.equals("-d") || a.equals("--dir")) && i + 1 < args.length) {
+                dir = args[++i];
+            } else if (a.startsWith("--dir=")) {
+                dir = a.substring("--dir=".length());
+            }
+        }
+        return dir;
+    }
+
+    private static boolean hasForce(String[] args) {
+        for (String a : args) {
+            if (a.equals("--force")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static int runInit(String[] args) {
+        Path root = Path.of(generateDir(args)).toAbsolutePath().normalize();
+        boolean force = hasForce(args);
+        String[] out = Scanner.generate(root);
+        String[][] files = {{".env.example", out[0]}, {"ENVIRONMENT.md", out[1]}};
+        for (String[] f : files) {
+            String name = f[0];
+            Path target = root.resolve(name);
+            if (java.nio.file.Files.exists(target) && !force) {
+                System.out.println("skipped " + name + " (exists)");
+                continue;
+            }
+            writeFile(target, f[1]);
+            System.out.println((force ? "wrote " : "created ") + name);
+        }
+        return 0;
+    }
+
+    static int runFix(String[] args) {
+        Path root = Path.of(generateDir(args)).toAbsolutePath().normalize();
+        String[] out = Scanner.generate(root);
+        String[][] files = {{".env.example", out[0]}, {"ENVIRONMENT.md", out[1]}};
+        for (String[] f : files) {
+            writeFile(root.resolve(f[0]), f[1]);
+            System.out.println("wrote " + f[0]);
+        }
+        return 0;
+    }
+
+    private static void writeFile(Path target, String content) {
+        try {
+            java.nio.file.Files.writeString(target, content);
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
     }
 
     /** Hand-built JSON array; keys exactly rule, severity, name, message, file, line. */
