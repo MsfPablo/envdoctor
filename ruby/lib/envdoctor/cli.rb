@@ -11,6 +11,8 @@ module Envdoctor
     def run(argv)
       return run_diff(argv[1..]) if argv.first == "diff"
       return run_sync(argv[1..]) if argv.first == "sync"
+      return run_init(argv[1..]) if argv.first == "init"
+      return run_fix(argv[1..]) if argv.first == "fix"
 
       dir = "."
       strict = false
@@ -81,6 +83,50 @@ module Envdoctor
         d["onlyInB"].each { |k| puts "  + #{k}" }
       end
       puts "Common: #{d['common'].length} variable(s)"
+      0
+    end
+
+    # Generate `.env.example` and `ENVIRONMENT.md`, writing each only if absent
+    # (or always with --force).
+    def run_init(argv)
+      dir = "."
+      force = false
+      OptionParser.new do |o|
+        o.on("-d", "--dir DIR") { |v| dir = v }
+        o.on("--force") { force = true }
+      end.parse!(argv.dup)
+
+      root = File.expand_path(dir)
+      files = {
+        ".env.example" => Scanner.env_example_content(root),
+        "ENVIRONMENT.md" => Scanner.environment_doc_content(root)
+      }
+      files.each do |name, content|
+        path = File.join(root, name)
+        if File.exist?(path) && !force
+          puts "skipped #{name} (exists)"
+        else
+          File.write(path, content)
+          puts "#{force ? 'wrote' : 'created'} #{name}"
+        end
+      end
+      0
+    end
+
+    # Always (re)write both generated files.
+    def run_fix(argv)
+      dir = "."
+      OptionParser.new do |o|
+        o.on("-d", "--dir DIR") { |v| dir = v }
+      end.parse!(argv.dup)
+
+      root = File.expand_path(dir)
+      example = Scanner.env_example_content(root)
+      doc = Scanner.environment_doc_content(root)
+      File.write(File.join(root, ".env.example"), example)
+      puts "wrote .env.example"
+      File.write(File.join(root, "ENVIRONMENT.md"), doc)
+      puts "wrote ENVIRONMENT.md"
       0
     end
 
