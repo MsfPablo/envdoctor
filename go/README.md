@@ -61,16 +61,30 @@ go build ./cmd/envdoctor
 
 ## Subcommands
 
-Alongside `scan`, every port shares two environment subcommands:
+Alongside `scan`, every port shares these environment subcommands:
 
 ```bash
 envdoctor diff <envA> <envB>       # compare two environments (add --json)
 envdoctor sync <from> <to>         # copy missing keys (add --dry-run)
+envdoctor init [--force]           # generate .env.example + ENVIRONMENT.md
+envdoctor fix                      # (re)generate both docs
 ```
 
 `diff` reports which variable names are only in one environment; `sync` appends
 the missing keys to the target `.env` file as empty `KEY=` placeholders — values
 are never copied.
+
+### init / fix
+
+Both commands generate two files at the project root from the union of every
+variable name (defined in any `.env*` file ∪ referenced in source/infra), sorted
+ascending. Values are **never** written.
+
+- `.env.example` — a header comment followed by one `NAME=` line per variable.
+- `ENVIRONMENT.md` — a Markdown table of each variable with `Defined`/`Used` columns.
+
+`init` writes each file only if it does not already exist (`--force` overwrites);
+`fix` always regenerates both. Every port produces byte-identical files.
 
 ## Other languages
 
