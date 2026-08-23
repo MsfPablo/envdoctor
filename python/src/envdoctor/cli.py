@@ -7,7 +7,15 @@ import json
 import sys
 from pathlib import Path
 
-from .scanner import ScanResult, diff_labels, finding_to_dict, scan, sync_labels
+from .scanner import (
+    GENERATED_FILES,
+    ScanResult,
+    diff_labels,
+    finding_to_dict,
+    generate_docs,
+    scan,
+    sync_labels,
+)
 
 _RED = "\033[31m"
 _YELLOW = "\033[33m"
@@ -82,6 +90,36 @@ def _run_sync(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_init(args: argparse.Namespace) -> int:
+    root = Path(args.dir).resolve()
+    docs = generate_docs(root)
+    lines = []
+    for name in GENERATED_FILES:
+        target = root / name
+        content = docs[name]
+        if args.force:
+            target.write_text(content)
+            lines.append(f"wrote {name}")
+        elif target.exists():
+            lines.append(f"skipped {name} (exists)")
+        else:
+            target.write_text(content)
+            lines.append(f"created {name}")
+    print("\n".join(lines))
+    return 0
+
+
+def _run_fix(args: argparse.Namespace) -> int:
+    root = Path(args.dir).resolve()
+    docs = generate_docs(root)
+    lines = []
+    for name in GENERATED_FILES:
+        (root / name).write_text(docs[name])
+        lines.append(f"wrote {name}")
+    print("\n".join(lines))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="envdoctor",
@@ -107,12 +145,23 @@ def main(argv: list[str] | None = None) -> int:
     sync_cmd.add_argument("--dry-run", action="store_true", help="Show changes without writing")
     sync_cmd.add_argument("--json", action="store_true", help="Emit the result as JSON")
 
+    init_cmd = sub.add_parser("init", help="Generate .env.example and ENVIRONMENT.md")
+    init_cmd.add_argument("-d", "--dir", default=".", help="Project root (default: cwd)")
+    init_cmd.add_argument("--force", action="store_true", help="Overwrite existing files")
+
+    fix_cmd = sub.add_parser("fix", help="Regenerate .env.example and ENVIRONMENT.md")
+    fix_cmd.add_argument("-d", "--dir", default=".", help="Project root (default: cwd)")
+
     args = parser.parse_args(argv)
 
     if args.command == "diff":
         return _run_diff(args)
     if args.command == "sync":
         return _run_sync(args)
+    if args.command == "init":
+        return _run_init(args)
+    if args.command == "fix":
+        return _run_fix(args)
     if args.command != "scan":
         parser.print_help()
         return 0
