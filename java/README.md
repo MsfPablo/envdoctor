@@ -36,6 +36,16 @@ java -jar target/envdoctor-0.1.0.jar scan --json         # machine-readable JSON
 Reconciles variables **used** in Java source (`System.getenv("X")`) against
 those **defined** in `.env` files:
 
+It also treats interpolated variables in **Docker Compose**
+(`docker-compose.yml`, `compose.yaml`, …), **GitHub Actions** workflows
+(`.github/workflows/*.yml`), and **Kubernetes** manifests (any `*.yml`/`*.yaml`
+with `apiVersion:` and `kind:`) as *used*. `${VAR}` / `$VAR` interpolation is
+recognised everywhere (escaped `$$` is ignored), and in Actions the
+`secrets.X` / `vars.X` / `env.X` contexts are recognised too. This feeds the
+existing missing/undefined and unused detectors — no new rules, and values are
+never read from these files. Parsing is dependency-free (regex/line scanning,
+no YAML library).
+
 | Rule | Severity | Meaning |
 |------|----------|---------|
 | `undefined-in-source` | error | Used in code but not defined in any `.env` file |

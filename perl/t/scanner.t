@@ -1,8 +1,9 @@
 use strict;
 use warnings;
-use Test::More tests => 34;
+use Test::More tests => 42;
 use File::Temp ();
 use File::Spec ();
+use File::Path ();
 use FindBin ();
 use lib "$FindBin::Bin/../lib";
 use App::Envdoctor::Scanner;
@@ -148,4 +149,46 @@ ok( !( grep { $_->{rule} eq 'type-mismatch' } @$f5 ),
     App::Envdoctor::Scanner::sync_labels( "$d2", 'default', 'production', 0 );
     my $prod = App::Envdoctor::Scanner::_read( File::Spec->catfile("$d2",'.env.production') );
     ok( $prod =~ /B=\n/ && $prod =~ /A=9/ && $prod !~ /B=2/, 'sync appends B= without value' );
+}
+
+# ---- Docker Compose + GitHub Actions + Kubernetes source scanning -----------
+{
+    my $dir = File::Temp->newdir;
+    open my $e, '>', File::Spec->catfile( "$dir", '.env' ) or die $!;
+    print {$e} "DB_URL=postgres://localhost\n"; close $e;
+    open my $c, '>', File::Spec->catfile( "$dir", 'docker-compose.yml' ) or die $!;
+    print {$c} "services:\n  app:\n    environment:\n"
+        . "      - SECRET=\${COMPOSE_SECRET}\n      - URL=\${DB_URL}\n      - LIT=\$\$NOT_A_VAR\n";
+    close $c;
+    my $wfdir = File::Spec->catdir( "$dir", '.github', 'workflows' );
+    File::Path::make_path($wfdir);
+    open my $w, '>', File::Spec->catfile( $wfdir, 'ci.yml' ) or die $!;
+    print {$w} "jobs:\n  deploy:\n    steps:\n"
+        . "      - run: deploy --key \${{ secrets.DEPLOY_KEY }} --region \${{ vars.REGION }}\n";
+    close $w;
+
+    my $f = App::Envdoctor::Scanner::scan("$dir");
+    my %err = map { $_->{name} => $_ } grep { $_->{rule} eq 'undefined-in-source' } @$f;
+    ok( $err{COMPOSE_SECRET}, 'COMPOSE_SECRET referenced from compose' );
+    ok( $err{DEPLOY_KEY},     'DEPLOY_KEY referenced from actions secrets context' );
+    ok( $err{REGION},         'REGION referenced from actions vars context' );
+    is( $err{COMPOSE_SECRET}{message},
+        'referenced but not defined in any environment file',
+        'undefined-in-source uses new message' );
+    ok( !$err{NOT_A_VAR}, 'escaped $$ not treated as a variable' );
+    ok( !( grep { $_->{rule} eq 'unused' && $_->{name} eq 'DB_URL' } @$f ),
+        'DB_URL used via compose interpolation, not unused' );
+    my $blob = join "\n", map { $_->{message} } @$f;
+    ok( $blob !~ /postgres/, 'no values leak from infra scanning' );
+}
+
+# ---- Kubernetes manifest interpolation --------------------------------------
+{
+    my $dir = File::Temp->newdir;
+    open my $k, '>', File::Spec->catfile( "$dir", 'deploy.yaml' ) or die $!;
+    print {$k} "apiVersion: apps/v1\nkind: Deployment\nspec:\n  value: \${K8S_VAR}\n";
+    close $k;
+    my $f = App::Envdoctor::Scanner::scan("$dir");
+    ok( ( grep { $_->{rule} eq 'undefined-in-source' && $_->{name} eq 'K8S_VAR' } @$f ),
+        'K8S_VAR referenced from a kubernetes manifest' );
 }

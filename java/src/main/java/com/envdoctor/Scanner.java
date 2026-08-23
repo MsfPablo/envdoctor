@@ -36,6 +36,19 @@ public final class Scanner {
     private static final Pattern BOOLEAN = Pattern.compile("^(?:true|false)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern URL = Pattern.compile("^https?://");
 
+    private static final Pattern COMPOSE_NAME =
+            Pattern.compile("^(?:docker-)?compose(?:[.-].*)?\\.ya?ml$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern YAML_NAME =
+            Pattern.compile("\\.ya?ml$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern K8S_APIVERSION = Pattern.compile("(?m)^apiVersion:");
+    private static final Pattern K8S_KIND = Pattern.compile("(?m)^kind:");
+    private static final Pattern INTERP_BRACE =
+            Pattern.compile("\\$\\{([A-Za-z_][A-Za-z0-9_]*)");
+    private static final Pattern INTERP_BARE =
+            Pattern.compile("\\$([A-Za-z_][A-Za-z0-9_]*)");
+    private static final Pattern ACTIONS_CONTEXT =
+            Pattern.compile("\\b(?:secrets|vars|env)\\.([A-Za-z_][A-Za-z0-9_]*)");
+
     private Scanner() {}
 
     /** One occurrence of a variable inside a single dotenv file. */
@@ -81,6 +94,57 @@ public final class Scanner {
                 continue;
             }
             int line = (int) text.substring(0, m.start()).chars().filter(c -> c == '\n').count() + 1;
+            used.put(name, new int[] {line});
+        }
+        return used;
+    }
+
+    /**
+     * Classify an infra file by relative path, basename, and content.
+     * Returns "compose", "actions", "k8s", or {@code null}.
+     */
+    public static String classifyInfra(String rel, String base, String content) {
+        String norm = rel.replace('\\', '/');
+        if (COMPOSE_NAME.matcher(base).matches()) {
+            return "compose";
+        }
+        if ((norm.startsWith(".github/workflows/") || norm.contains("/.github/workflows/"))
+                && YAML_NAME.matcher(base).find()) {
+            return "actions";
+        }
+        if (YAML_NAME.matcher(base).find()
+                && K8S_APIVERSION.matcher(content).find()
+                && K8S_KIND.matcher(content).find()) {
+            return "k8s";
+        }
+        return null;
+    }
+
+    /**
+     * Extract used variable names (first-by-offset origin) from an infra file.
+     * Dependency-free: escaped {@code $$} neutralised, then interpolation
+     * (plus GitHub Actions contexts) scanned by regex.
+     */
+    public static Map<String, int[]> scanInfra(String content, String type) {
+        String text = content.replace("$$", "  "); // neutralise escaped $$ (same length)
+        java.util.TreeMap<Integer, String> hits = new java.util.TreeMap<>();
+        List<Pattern> patterns = new ArrayList<>(List.of(INTERP_BRACE, INTERP_BARE));
+        if ("actions".equals(type)) {
+            patterns.add(ACTIONS_CONTEXT);
+        }
+        for (Pattern p : patterns) {
+            Matcher m = p.matcher(text);
+            while (m.find()) {
+                hits.putIfAbsent(m.start(), m.group(1));
+            }
+        }
+        Map<String, int[]> used = new LinkedHashMap<>();
+        for (Map.Entry<Integer, String> e : hits.entrySet()) {
+            String name = e.getValue();
+            if (used.containsKey(name)) {
+                continue;
+            }
+            int line = (int) text.substring(0, e.getKey()).chars().filter(c -> c == '\n').count() + 1;
             used.put(name, new int[] {line});
         }
         return used;
@@ -392,7 +456,8 @@ public final class Scanner {
                     boolean isEnv = label != null
                             && (name.equals(".env") || name.startsWith(".env."));
                     boolean isJava = name.endsWith(".java");
-                    if (!isEnv && !isJava) {
+                    boolean isYaml = YAML_NAME.matcher(name).find();
+                    if (!isEnv && !isJava && !isYaml) {
                         return;
                     }
                     String content = read(path);
@@ -415,11 +480,19 @@ public final class Scanner {
                                         rel, occ.get(0).line()));
                             }
                         });
-                    } else {
+                    } else if (isJava) {
                         scanSource(content).forEach((k, ln) -> {
                             usedFile.putIfAbsent(k, rel);
                             usedLine.putIfAbsent(k, ln[0]);
                         });
+                    } else {
+                        String type = classifyInfra(rel, name, content);
+                        if (type != null) {
+                            scanInfra(content, type).forEach((k, ln) -> {
+                                usedFile.putIfAbsent(k, rel);
+                                usedLine.putIfAbsent(k, ln[0]);
+                            });
+                        }
                     }
                 });
         } catch (IOException e) {
@@ -433,7 +506,7 @@ public final class Scanner {
         for (String name : new TreeSet<>(usedFile.keySet())) {
             if (!definedFile.containsKey(name)) {
                 undefined.add(new Finding("undefined-in-source", "error", name,
-                        "used in source code but not defined in any environment file",
+                        "referenced but not defined in any environment file",
                         usedFile.get(name), usedLine.get(name)));
             }
         }
@@ -622,7 +695,8 @@ public final class Scanner {
     private static boolean notIgnored(Path path) {
         for (Path part : path) {
             String s = part.toString();
-            if (s.equals(".git") || s.equals("target") || s.equals("node_modules")) {
+            if (s.equals(".git") || s.equals("target") || s.equals("node_modules")
+                    || s.equals("vendor")) {
                 return false;
             }
         }

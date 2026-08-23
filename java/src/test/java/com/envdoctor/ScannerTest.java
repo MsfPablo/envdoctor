@@ -210,6 +210,42 @@ class ScannerTest {
     }
 
     @Test
+    void scansComposeActionsAndKubernetes(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve(".env"), "DB_URL=postgres://localhost\n");
+        Files.writeString(dir.resolve("docker-compose.yml"),
+                "services:\n  app:\n    environment:\n"
+                        + "      - SECRET=${COMPOSE_SECRET}\n      - URL=${DB_URL}\n"
+                        + "      - LIT=$$NOT_A_VAR\n");
+        Path wf = dir.resolve(".github").resolve("workflows");
+        Files.createDirectories(wf);
+        Files.writeString(wf.resolve("ci.yml"),
+                "jobs:\n  deploy:\n    steps:\n"
+                        + "      - run: deploy --key ${{ secrets.DEPLOY_KEY }}"
+                        + " --region ${{ vars.REGION }}\n");
+
+        List<Scanner.Finding> f = Scanner.scan(dir);
+        Scanner.Finding secret = find(f, "undefined-in-source", "COMPOSE_SECRET");
+        assertNotNull(secret);
+        assertEquals("referenced but not defined in any environment file", secret.message());
+        assertNotNull(find(f, "undefined-in-source", "DEPLOY_KEY"));
+        assertNotNull(find(f, "undefined-in-source", "REGION"));
+        assertNull(find(f, "undefined-in-source", "NOT_A_VAR"));
+        assertNull(find(f, "unused", "DB_URL"));
+        for (Scanner.Finding x : f) {
+            assertFalse(x.message().contains("postgres"));
+        }
+    }
+
+    @Test
+    void scansKubernetesManifest(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve("deploy.yaml"),
+                "apiVersion: apps/v1\nkind: Deployment\nspec:\n  value: ${K8S_VAR}\n");
+
+        List<Scanner.Finding> f = Scanner.scan(dir);
+        assertNotNull(find(f, "undefined-in-source", "K8S_VAR"));
+    }
+
+    @Test
     void diffAndSync(@TempDir Path dir) throws IOException {
         Files.writeString(dir.resolve(".env"), "A=1\nB=2\n");
         Files.writeString(dir.resolve(".env.production"), "A=9\n");
