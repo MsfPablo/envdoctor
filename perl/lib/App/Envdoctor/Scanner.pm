@@ -194,7 +194,7 @@ sub _find_files {
         sub {
             return unless -f $_;
             my $full = $File::Find::name;
-            return if $full =~ m{/(?:\.git|blib|node_modules)/};
+            return if $full =~ m{/(?:\.git|blib|vendor|node_modules|target)/};
             my $name = $_;
             if ( $want eq 'env' ) {
                 push @out, $full
@@ -208,6 +208,80 @@ sub _find_files {
         $root
     );
     return sort @out;
+}
+
+# Classify an infra file by its relative path + basename + content.
+# Returns 'compose', 'actions', 'k8s', or undef.
+sub classify_infra {
+    my ( $rel, $base, $content ) = @_;
+    my $norm = $rel;
+    $norm =~ s{\\}{/}g;
+    return 'compose' if $base =~ /^(?:docker-)?compose(?:[.-].*)?\.ya?ml$/i;
+    if ( $norm =~ m{(?:^|/)\.github/workflows/} && $base =~ /\.ya?ml$/i ) {
+        return 'actions';
+    }
+    if ( $base =~ /\.ya?ml$/i ) {
+        return 'k8s'
+            if $content =~ /^apiVersion:/m && $content =~ /^kind:/m;
+    }
+    return undef;
+}
+
+# Extract used variable NAMES (with first-by-offset origin) from an infra file.
+# Dependency-free: escaped `$$` neutralised, then interpolation (+ actions
+# contexts) scanned by regex. Returns { NAME => { file => $rel, line => N } }.
+sub scan_infra {
+    my ( $rel, $content, $type ) = @_;
+    my $text = $content;
+    $text =~ s/\$\$/  /g;    # neutralise escaped $$ (preserve offsets)
+
+    my @res;                 # [ start, name ]
+    my @patterns = (
+        qr/\$\{([A-Za-z_][A-Za-z0-9_]*)/,
+        qr/\$([A-Za-z_][A-Za-z0-9_]*)/,
+    );
+    push @patterns, qr/\b(?:secrets|vars|env)\.([A-Za-z_][A-Za-z0-9_]*)/
+        if defined $type && $type eq 'actions';
+
+    for my $re (@patterns) {
+        while ( $text =~ /$re/g ) {
+            my $name  = $1;
+            my $start = pos($text) - length($&);
+            push @res, [ $start, $name ];
+        }
+    }
+
+    my %used;
+    for my $r ( sort { $a->[0] <=> $b->[0] } @res ) {
+        my ( $start, $name ) = @$r;
+        next if exists $used{$name};
+        my $pre  = substr( $text, 0, $start );
+        my $line = ( $pre =~ tr/\n// ) + 1;
+        $used{$name} = { file => $rel, line => $line };
+    }
+    return \%used;
+}
+
+# Find infra files (compose / actions / k8s) under root, in sorted order.
+# Returns list of [ full, rel, type ].
+sub _find_infra {
+    my ($root) = @_;
+    my @out;
+    File::Find::find(
+        sub {
+            return unless -f $_;
+            my $full = $File::Find::name;
+            return if $full =~ m{/(?:\.git|blib|vendor|node_modules|target)/};
+            my $base = $_;
+            return unless $base =~ /\.ya?ml$/i;
+            my $rel     = _rel( $root, $full );
+            my $content = _read($full);
+            my $type    = classify_infra( $rel, $base, $content );
+            push @out, [ $full, $rel, $type ] if defined $type;
+        },
+        $root
+    );
+    return sort { $a->[1] cmp $b->[1] } @out;
 }
 
 # Map each environment label to a hashref set of variable names defined in it.
@@ -294,6 +368,11 @@ sub scan {
         my $u = scan_source( _rel( $root, $f ), _read($f) );
         $used{$_} //= $u->{$_} for keys %$u;
     }
+    for my $rec ( _find_infra($root) ) {
+        my ( $full, $rel, $type ) = @$rec;
+        my $u = scan_infra( $rel, _read($full), $type );
+        $used{$_} //= $u->{$_} for keys %$u;
+    }
 
     my @defined_names = keys %def;
     my $n_labels      = scalar keys %all_labels;
@@ -306,7 +385,7 @@ sub scan {
             rule     => 'undefined-in-source',
             severity => 'error',
             name     => $name,
-            message  => 'used in source code but not defined in any environment file',
+            message  => 'referenced but not defined in any environment file',
             origin   => $used{$name},
             };
     }
