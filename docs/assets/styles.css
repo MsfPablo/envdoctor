@@ -214,6 +214,16 @@ h1, h2, h3 { line-height: 1.2; letter-spacing: -0.02em; margin: 0; }
   max-width: 420px;
   margin: 24px auto 0;
 }
+.hero-ph {
+  display: flex;
+  justify-content: center;
+  margin-top: 28px;
+}
+.hero-ph img {
+  display: block;
+  width: 250px;
+  height: 54px;
+}
 
 /* ---------- Copy field ---------- */
 .copy-field {
