@@ -17,6 +17,12 @@ final class Cli
         if (($args[0] ?? null) === 'sync') {
             return self::runSync(array_slice($args, 1));
         }
+        if (($args[0] ?? null) === 'init') {
+            return self::runInit(array_slice($args, 1));
+        }
+        if (($args[0] ?? null) === 'fix') {
+            return self::runFix(array_slice($args, 1));
+        }
 
         $dir = '.';
         $strict = false;
@@ -98,6 +104,69 @@ final class Cli
         }
 
         return [$pos, $dir, $dryRun, $json];
+    }
+
+    /**
+     * Generate `.env.example` and `ENVIRONMENT.md`, writing each only if absent
+     * (or always with --force).
+     *
+     * @param string[] $args
+     */
+    private static function runInit(array $args): int
+    {
+        $dir = '.';
+        $force = false;
+        for ($i = 0; $i < count($args); $i++) {
+            $a = $args[$i];
+            if ($a === '-d' || $a === '--dir') {
+                $dir = $args[++$i] ?? '.';
+            } elseif (str_starts_with($a, '--dir=')) {
+                $dir = substr($a, 6);
+            } elseif ($a === '--force') {
+                $force = true;
+            }
+        }
+        $root = rtrim(realpath($dir) ?: $dir, DIRECTORY_SEPARATOR);
+        $files = [
+            '.env.example' => Scanner::envExampleContent($root),
+            'ENVIRONMENT.md' => Scanner::environmentDocContent($root),
+        ];
+        foreach ($files as $name => $content) {
+            $path = $root . DIRECTORY_SEPARATOR . $name;
+            if (is_file($path) && !$force) {
+                echo "skipped $name (exists)\n";
+            } else {
+                file_put_contents($path, $content);
+                echo ($force ? 'wrote' : 'created') . " $name\n";
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Always (re)write both generated files.
+     *
+     * @param string[] $args
+     */
+    private static function runFix(array $args): int
+    {
+        $dir = '.';
+        for ($i = 0; $i < count($args); $i++) {
+            $a = $args[$i];
+            if ($a === '-d' || $a === '--dir') {
+                $dir = $args[++$i] ?? '.';
+            } elseif (str_starts_with($a, '--dir=')) {
+                $dir = substr($a, 6);
+            }
+        }
+        $root = rtrim(realpath($dir) ?: $dir, DIRECTORY_SEPARATOR);
+        file_put_contents($root . DIRECTORY_SEPARATOR . '.env.example', Scanner::envExampleContent($root));
+        echo "wrote .env.example\n";
+        file_put_contents($root . DIRECTORY_SEPARATOR . 'ENVIRONMENT.md', Scanner::environmentDocContent($root));
+        echo "wrote ENVIRONMENT.md\n";
+
+        return 0;
     }
 
     /** @param string[] $args */

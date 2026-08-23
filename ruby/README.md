@@ -62,11 +62,19 @@ Alongside `scan`, every port shares two environment subcommands:
 ```bash
 envdoctor diff <envA> <envB>       # compare two environments (add --json)
 envdoctor sync <from> <to>         # copy missing keys (add --dry-run)
+envdoctor init                     # generate .env.example + ENVIRONMENT.md (add --force)
+envdoctor fix                      # always (re)generate both files
 ```
 
 `diff` reports which variable names are only in one environment; `sync` appends
 the missing keys to the target `.env` file as empty `KEY=` placeholders — values
 are never copied.
+
+`init` / `fix` generate two files at the project root from the union of defined
+(`.env*`) and used (source + Compose/Actions/K8s) variable names: `.env.example`
+(one `KEY=` per variable) and `ENVIRONMENT.md` (a Defined/Used table). Values are
+never written. `init` writes each file only if absent (`--force` overwrites);
+`fix` always rewrites both. Both accept `-d/--dir PATH`.
 
 ## Other languages
 
