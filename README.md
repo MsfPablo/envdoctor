@@ -2,6 +2,10 @@
   <img src="docs/assets/logo.svg" width="120" alt="envdoctor logo" />
 </p>
 
+<p align="center">
+  <a href="https://www.producthunt.com/products/envdoctor?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-envdoctor" target="_blank" rel="noopener noreferrer"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1229915&amp;theme=light&amp;t=1787493130629" alt="envdoctor - ESLint for env vars — catch config bugs before they deploy | Product Hunt" width="250" height="54" /></a>
+</p>
+
 # @arunskg/envdoctor
 
 [![npm version](https://img.shields.io/npm/v/@arunskg/envdoctor.svg)](https://www.npmjs.com/package/@arunskg/envdoctor)
