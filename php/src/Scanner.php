@@ -214,6 +214,83 @@ final class Scanner
         return $out;
     }
 
+    private const COMPOSE_RE = '/^(docker-)?compose([.-].*)?\.ya?ml$/i';
+
+    /**
+     * Walk the project and classify infra YAML files.
+     *
+     * @return array<int, array{path: string, kind: string}>
+     */
+    private static function discoverInfraFiles(string $root): array
+    {
+        $out = [];
+        $it = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($it as $file) {
+            $path = $file->getPathname();
+            $skip = false;
+            foreach (['.git', 'vendor', 'node_modules', 'target'] as $bad) {
+                if (str_contains($path, DIRECTORY_SEPARATOR . $bad . DIRECTORY_SEPARATOR)) {
+                    $skip = true;
+                    break;
+                }
+            }
+            if ($skip) {
+                continue;
+            }
+            $base = $file->getFilename();
+            $isYaml = preg_match('/\.ya?ml$/i', $base) === 1;
+            if (preg_match(self::COMPOSE_RE, $base) === 1) {
+                $out[] = ['path' => $path, 'kind' => 'compose'];
+            } elseif ($isYaml && str_contains($path, DIRECTORY_SEPARATOR . '.github' . DIRECTORY_SEPARATOR . 'workflows' . DIRECTORY_SEPARATOR)) {
+                $out[] = ['path' => $path, 'kind' => 'actions'];
+            } elseif ($isYaml) {
+                $content = (string) file_get_contents($path);
+                if (preg_match('/^apiVersion:/m', $content) === 1 && preg_match('/^kind:/m', $content) === 1) {
+                    $out[] = ['path' => $path, 'kind' => 'k8s'];
+                }
+            }
+        }
+        usort($out, fn($a, $b) => strcmp($a['path'], $b['path']));
+
+        return $out;
+    }
+
+    /**
+     * Extract used variable NAMES (with origin) from an infra YAML file. First
+     * removes escaped `$$` (two spaces, offsets preserved), then scans for
+     * interpolation and, for GitHub Actions, the secrets/vars/env contexts.
+     *
+     * @return array<string, array{file: string, line: int}>
+     */
+    public static function scanInfra(string $path, string $content, string $kind): array
+    {
+        $text = str_replace('$$', '  ', $content);
+        $patterns = [
+            '/\$\{([A-Za-z_][A-Za-z0-9_]*)/',
+            '/\$([A-Za-z_][A-Za-z0-9_]*)/',
+        ];
+        if ($kind === 'actions') {
+            $patterns[] = '/\b(?:secrets|vars|env)\.([A-Za-z_][A-Za-z0-9_]*)/';
+        }
+        $used = [];
+        foreach ($patterns as $pattern) {
+            if (preg_match_all($pattern, $text, $matches, PREG_OFFSET_CAPTURE)) {
+                foreach ($matches[1] as $m) {
+                    $name = $m[0];
+                    if (isset($used[$name])) {
+                        continue;
+                    }
+                    $line = substr_count(substr($text, 0, $m[1]), "\n") + 1;
+                    $used[$name] = ['file' => $path, 'line' => $line];
+                }
+            }
+        }
+
+        return $used;
+    }
+
     /** @return Finding[] */
     /**
      * Map each environment label to the sorted list of variable names in it.
@@ -322,6 +399,14 @@ final class Scanner
                 $used[$k] ??= $v;
             }
         }
+        // Infra sources (Docker Compose / GitHub Actions / Kubernetes) contribute
+        // additional used names; first origin wins.
+        foreach (self::discoverInfraFiles($root) as $infra) {
+            $rel = self::rel($root, $infra['path']);
+            foreach (self::scanInfra($rel, (string) file_get_contents($infra['path']), $infra['kind']) as $k => $v) {
+                $used[$k] ??= $v;
+            }
+        }
 
         $errors = [];
         $warnings = [];
@@ -335,7 +420,7 @@ final class Scanner
                     'undefined-in-source',
                     'error',
                     $name,
-                    'used in source code but not defined in any environment file',
+                    'referenced but not defined in any environment file',
                     $used[$name]
                 );
             }
