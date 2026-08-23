@@ -92,6 +92,19 @@ envdoctor sync <from> <to>         # copy missing keys (add --dry-run)
 the missing keys to the target `.env` file as empty `KEY=` placeholders — values
 are never copied.
 
+### init / fix
+
+```bash
+envdoctor init [-d DIR] [--force]  # scaffold .env.example + ENVIRONMENT.md
+envdoctor fix  [-d DIR]            # (re)generate both files
+```
+
+Both generate `.env.example` and `ENVIRONMENT.md` at the project root from the
+union of defined (`.env*`) and used (source/infra) variable names, sorted. Only
+names are written — values are never emitted. `init` writes each file only when
+absent (`--force` overwrites); `fix` always rewrites both. Output is identical
+byte-for-byte across every envdoctor port.
+
 ## Other languages
 
 envdoctor ships as a standalone native port for each ecosystem:

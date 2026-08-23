@@ -8,6 +8,8 @@ use Cwd ();
 
 exit run_diff( @ARGV[ 1 .. $#ARGV ] ) if @ARGV && $ARGV[0] eq 'diff';
 exit run_sync( @ARGV[ 1 .. $#ARGV ] ) if @ARGV && $ARGV[0] eq 'sync';
+exit run_init( @ARGV[ 1 .. $#ARGV ] ) if @ARGV && $ARGV[0] eq 'init';
+exit run_fix( @ARGV[ 1 .. $#ARGV ] )  if @ARGV && $ARGV[0] eq 'fix';
 
 my $dir    = '.';
 my $strict = 0;
@@ -91,6 +93,52 @@ sub run_diff {
     if ( @{ $d->{onlyInA} } ) { print "Only in $a:\n"; print "  + $_\n" for @{ $d->{onlyInA} }; }
     if ( @{ $d->{onlyInB} } ) { print "Only in $b:\n"; print "  + $_\n" for @{ $d->{onlyInB} }; }
     printf "Common: %d variable(s)\n", scalar @{ $d->{common} };
+    return 0;
+}
+
+sub _generate_args {
+    my @a = @_;
+    my ( $dir, $force ) = ( '.', 0 );
+    while (@a) {
+        my $x = shift @a;
+        if    ( $x eq '-d' || $x eq '--dir' ) { $dir = shift @a // '.'; }
+        elsif ( $x =~ /^--dir=(.*)$/ )        { $dir = $1; }
+        elsif ( $x eq '--force' )             { $force = 1; }
+    }
+    return ( $dir, $force );
+}
+
+sub run_init {
+    my ( $dir, $force ) = _generate_args(@_);
+    my $root = Cwd::abs_path($dir) // $dir;
+    my ( $example, $md ) = App::Envdoctor::Scanner::generate($root);
+    for my $spec ( [ '.env.example', $example ], [ 'ENVIRONMENT.md', $md ] ) {
+        my ( $name, $content ) = @$spec;
+        my $target = File::Spec->catfile( $root, $name );
+        if ( -e $target && !$force ) {
+            print "skipped $name (exists)\n";
+            next;
+        }
+        open my $fh, '>', $target or die "cannot write $target: $!";
+        print {$fh} $content;
+        close $fh;
+        print $force ? "wrote $name\n" : "created $name\n";
+    }
+    return 0;
+}
+
+sub run_fix {
+    my ( $dir, undef ) = _generate_args(@_);
+    my $root = Cwd::abs_path($dir) // $dir;
+    my ( $example, $md ) = App::Envdoctor::Scanner::generate($root);
+    for my $spec ( [ '.env.example', $example ], [ 'ENVIRONMENT.md', $md ] ) {
+        my ( $name, $content ) = @$spec;
+        my $target = File::Spec->catfile( $root, $name );
+        open my $fh, '>', $target or die "cannot write $target: $!";
+        print {$fh} $content;
+        close $fh;
+        print "wrote $name\n";
+    }
     return 0;
 }
 
