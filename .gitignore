@@ -39,6 +39,9 @@ rust/target/
 /downloads.svg
 /downloads.json
 
+# Local AI session log (SessionEnd hook) — kept local, not published
+/MEMORY.md
+
 # Perl dist artifacts
 perl/App-Envdoctor-*
 perl/MYMETA.*
