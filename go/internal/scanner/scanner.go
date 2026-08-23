@@ -61,6 +61,17 @@ var (
 	envLine      = regexp.MustCompile(`^\s*(?:export\s+)?([A-Za-z_]\w*)\s*=(.*)$`)
 )
 
+// Infra source scanning (Docker Compose / GitHub Actions / Kubernetes).
+// Dependency-free: regex/line scanning only, interpolation refs only.
+var (
+	composeBasename = regexp.MustCompile(`(?i)^(docker-)?compose([.-].*)?\.ya?ml$`)
+	interpBrace     = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)`)
+	interpBare      = regexp.MustCompile(`\$([A-Za-z_][A-Za-z0-9_]*)`)
+	actionsRef      = regexp.MustCompile(`\b(?:secrets|vars|env)\.([A-Za-z_][A-Za-z0-9_]*)`)
+	k8sAPIVersion   = regexp.MustCompile(`(?m)^apiVersion:`)
+	k8sKind         = regexp.MustCompile(`(?m)^kind:`)
+)
+
 // publicPrefixes are client-exposed env prefixes (case-sensitive, exact).
 var publicPrefixes = []string{
 	"NEXT_PUBLIC_",
@@ -233,6 +244,54 @@ func ScanSource(path, content string) map[string]Origin {
 	return used
 }
 
+// hasWorkflowsSegment reports whether path contains a .github/workflows/ segment.
+func hasWorkflowsSegment(path string) bool {
+	parts := strings.Split(filepath.ToSlash(path), "/")
+	for i := 0; i+1 < len(parts); i++ {
+		if parts[i] == ".github" && parts[i+1] == "workflows" {
+			return true
+		}
+	}
+	return false
+}
+
+// classifyInfra returns "compose", "actions", "k8s", or "" for a YAML file.
+func classifyInfra(path, base, content string) string {
+	if composeBasename.MatchString(base) {
+		return "compose"
+	}
+	if hasWorkflowsSegment(path) {
+		return "actions"
+	}
+	if k8sAPIVersion.MatchString(content) && k8sKind.MatchString(content) {
+		return "k8s"
+	}
+	return ""
+}
+
+// ScanInfra returns variable name -> first origin for interpolation refs in an
+// infra file. Escaped $$ is neutralized first (offset-preserving). Interpolation
+// applies to all kinds; Actions additionally matches secrets./vars./env. refs.
+func ScanInfra(path, content, kind string) map[string]Origin {
+	text := strings.ReplaceAll(content, "$$", "  ")
+	used := map[string]Origin{}
+	pats := []*regexp.Regexp{interpBrace, interpBare}
+	if kind == "actions" {
+		pats = append(pats, actionsRef)
+	}
+	for _, re := range pats {
+		for _, m := range re.FindAllStringSubmatchIndex(text, -1) {
+			name := text[m[2]:m[3]]
+			if _, ok := used[name]; ok {
+				continue
+			}
+			line := strings.Count(text[:m[0]], "\n") + 1
+			used[name] = Origin{File: path, Line: line}
+		}
+	}
+	return used
+}
+
 // envOccurrence is one definition of a key in a dotenv file.
 type envOccurrence struct {
 	Origin Origin
@@ -261,7 +320,7 @@ func ParseEnv(path, content string) map[string][]envOccurrence {
 
 func skipDir(name string) bool {
 	switch name {
-	case ".git", "vendor", "node_modules":
+	case ".git", "vendor", "node_modules", "target":
 		return true
 	}
 	return false
@@ -291,7 +350,9 @@ func Scan(root string) (Result, error) {
 		base := info.Name()
 		isEnv := isEnvFile(base)
 		isGo := strings.HasSuffix(base, ".go")
-		if !isEnv && !isGo {
+		low := strings.ToLower(base)
+		isYAML := strings.HasSuffix(low, ".yml") || strings.HasSuffix(low, ".yaml")
+		if !isEnv && !isGo && !isYAML {
 			return nil
 		}
 		data, readErr := os.ReadFile(path)
@@ -299,6 +360,16 @@ func Scan(root string) (Result, error) {
 			return readErr
 		}
 		rel, _ := filepath.Rel(root, path)
+		if isYAML && !isEnv && !isGo {
+			if kind := classifyInfra(path, base, string(data)); kind != "" {
+				for k, v := range ScanInfra(rel, string(data), kind) {
+					if _, ok := used[k]; !ok {
+						used[k] = v
+					}
+				}
+			}
+			return nil
+		}
 		if isEnv {
 			label := envLabel(base)
 			projectLabels[label] = true
@@ -347,7 +418,7 @@ func Scan(root string) (Result, error) {
 		if _, ok := defined[name]; !ok {
 			res.Findings = append(res.Findings, Finding{
 				Rule: "undefined-in-source", Severity: "error", Name: name,
-				Message: "used in source code but not defined in any environment file",
+				Message: "referenced but not defined in any environment file",
 				Origin:  used[name],
 			})
 		}

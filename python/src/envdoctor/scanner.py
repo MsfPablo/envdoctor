@@ -25,6 +25,16 @@ _USAGE_PATTERNS = [
 _DOCSTRING = re.compile(r"\"\"\".*?\"\"\"|'''.*?'''", re.DOTALL)
 _LINE_COMMENT = re.compile(r"#[^\n]*")
 
+# --- Infra source scanning (Docker Compose / GitHub Actions / Kubernetes) ---
+# Dependency-free: regex/line scanning only, interpolation refs only.
+_COMPOSE_BASENAME = re.compile(r"^(docker-)?compose([.-].*)?\.ya?ml$", re.IGNORECASE)
+_INTERP_BRACE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)")
+_INTERP_BARE = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)")
+_ACTIONS_REF = re.compile(r"\b(?:secrets|vars|env)\.([A-Za-z_][A-Za-z0-9_]*)")
+_K8S_APIVERSION = re.compile(r"(?m)^apiVersion:")
+_K8S_KIND = re.compile(r"(?m)^kind:")
+_INFRA_SKIP_DIRS = {".git", "vendor", "node_modules", "target"}
+
 _ENV_LINE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_]\w*)\s*=(.*)$")
 
 # Public/client-exposed environment prefixes (case-sensitive, exact).
@@ -195,6 +205,66 @@ def scan_source_file(path: Path) -> dict[str, Origin]:
     return used
 
 
+def _has_workflows_segment(path: Path) -> bool:
+    """True if the path contains a ``.github/workflows/`` directory segment."""
+    parts = path.parts
+    for i in range(len(parts) - 1):
+        if parts[i] == ".github" and parts[i + 1] == "workflows":
+            return True
+    return False
+
+
+def discover_infra_files(root: Path) -> list[tuple[Path, str]]:
+    """Return ``[(path, kind), ...]`` for Compose/Actions/Kubernetes YAML files.
+
+    ``kind`` is one of ``"compose"``, ``"actions"``, ``"k8s"``. Classification is
+    purely by filename/path/content, with no YAML parsing.
+    """
+    out: list[tuple[Path, str]] = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file():
+            continue
+        if any(part in _INFRA_SKIP_DIRS for part in path.parts):
+            continue
+        base = path.name
+        low = base.lower()
+        is_yaml = low.endswith(".yml") or low.endswith(".yaml")
+        if _COMPOSE_BASENAME.match(base):
+            out.append((path, "compose"))
+            continue
+        if is_yaml and _has_workflows_segment(path):
+            out.append((path, "actions"))
+            continue
+        if is_yaml:
+            try:
+                text = path.read_text()
+            except (OSError, UnicodeDecodeError):
+                continue
+            if _K8S_APIVERSION.search(text) and _K8S_KIND.search(text):
+                out.append((path, "k8s"))
+    return out
+
+
+def scan_infra_file(path: Path, kind: str) -> dict[str, Origin]:
+    """Return ``{NAME: first Origin}`` for interpolation refs in an infra file.
+
+    Escaped ``$$`` is neutralized first (offset-preserving). Interpolation refs
+    apply to all kinds; GitHub Actions additionally matches
+    ``secrets.X``/``vars.X``/``env.X`` references.
+    """
+    text = path.read_text().replace("$$", "  ")
+    used: dict[str, Origin] = {}
+    patterns = [_INTERP_BRACE, _INTERP_BARE]
+    if kind == "actions":
+        patterns.append(_ACTIONS_REF)
+    for pattern in patterns:
+        for match in pattern.finditer(text):
+            name = match.group(1)
+            line = text.count("\n", 0, match.start()) + 1
+            used.setdefault(name, Origin(path, line))
+    return used
+
+
 def discover_env_files(root: Path) -> list[Path]:
     files = sorted(root.glob(".env"))
     files += sorted(p for p in root.glob(".env.*") if not p.name.endswith(".example"))
@@ -289,6 +359,11 @@ def scan(root: Path, extensions: Iterable[str] = ("py",)) -> ScanResult:
         for name, origin in scan_source_file(src).items():
             used.setdefault(name, origin)
 
+    # Docker Compose / GitHub Actions / Kubernetes files also reference vars.
+    for infra_path, kind in discover_infra_files(root):
+        for name, origin in scan_infra_file(infra_path, kind).items():
+            used.setdefault(name, origin)
+
     result = ScanResult()
 
     # --- Errors, in rule order ---
@@ -301,7 +376,7 @@ def scan(root: Path, extensions: Iterable[str] = ("py",)) -> ScanResult:
                     rule="undefined-in-source",
                     severity="error",
                     name=name,
-                    message="used in source code but not defined in any environment file",
+                    message="referenced but not defined in any environment file",
                     origin=used[name],
                 )
             )

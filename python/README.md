@@ -31,7 +31,7 @@ then reports:
 
 | Rule | Severity | Meaning |
 |------|----------|---------|
-| `undefined-in-source` | error | Used in code but not defined in any `.env` file |
+| `undefined-in-source` | error | Referenced (source or infra files) but not defined in any `.env` file |
 | `duplicates` | error | The same key is defined 2+ times within a single `.env` file |
 | `public-prefix` | error | A secret-looking variable is exposed to client bundles via a public prefix (`NEXT_PUBLIC_`, `VITE_`, `REACT_APP_`, `EXPO_PUBLIC_`, `GATSBY_`, `NUXT_PUBLIC_`, `VUE_APP_`, `PUBLIC_`) |
 | `type-mismatch` | error | A variable's value has incompatible inferred types across environments (e.g. `PORT=3000` vs `PORT=abc`) |
@@ -39,6 +39,17 @@ then reports:
 | `environment-diff` | warning | Defined in some environment files but missing from others |
 | `weak-secret` | warning | A secret-looking variable has a weak, empty, or placeholder value |
 | `typo` | warning | A used-but-undefined name closely matches a defined one (likely a typo) |
+
+In addition to Python source, envdoctor scans **Docker Compose**
+(`docker-compose.yml` / `compose.yaml`), **GitHub Actions** workflows
+(`.github/workflows/*.yml`), and **Kubernetes** manifests (any YAML with both
+`apiVersion:` and `kind:`) for referenced variables. Detection is dependency-free
+(regex only, no YAML parser): shell-style interpolation `${VAR}` / `$VAR`
+(including `${VAR:-default}` forms) across all three, plus
+`${{ secrets.X }}`, `${{ vars.X }}`, and `${{ env.X }}` references in Actions.
+These references feed the same missing/undefined and unused detectors, so a
+variable referenced only in infra files but never defined is flagged, and one
+defined and referenced only in infra is not reported unused.
 
 Comments and docstrings are stripped before scanning, so documented examples
 don't cause false positives. Nothing is uploaded and variable **values** are

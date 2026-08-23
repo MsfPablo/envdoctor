@@ -187,6 +187,70 @@ def test_finding_to_dict_shape(tmp_path):
     assert isinstance(d["line"], int)
 
 
+def test_infra_sources_scanned(tmp_path):
+    _write(tmp_path, ".env", "DB_URL=postgres://x\n")
+    _write(
+        tmp_path,
+        "docker-compose.yml",
+        "services:\n"
+        "  web:\n"
+        "    image: x\n"
+        "    environment:\n"
+        "      - TOKEN=${COMPOSE_SECRET}\n"
+        "      - DB=${DB_URL}\n",
+    )
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        "jobs:\n"
+        "  build:\n"
+        "    steps:\n"
+        "      - run: deploy\n"
+        "        env:\n"
+        "          KEY: ${{ secrets.DEPLOY_KEY }}\n"
+        "          REGION: ${{ vars.REGION }}\n",
+    )
+    _write(
+        tmp_path,
+        "k8s/deploy.yaml",
+        "apiVersion: apps/v1\n"
+        "kind: Deployment\n"
+        "spec:\n"
+        "  value: ${K8S_VAR}\n",
+    )
+
+    result = scan(tmp_path)
+    undefined = {
+        f.name
+        for f in result.errors
+        if f.rule == "undefined-in-source"
+    }
+    # Referenced only in infra files but never defined -> undefined-in-source.
+    assert {"COMPOSE_SECRET", "DEPLOY_KEY", "REGION", "K8S_VAR"} <= undefined
+    # New message wording.
+    for f in result.findings:
+        if f.rule == "undefined-in-source":
+            assert f.message == "referenced but not defined in any environment file"
+    # DB_URL is defined and referenced in compose -> NOT reported unused.
+    unused = {f.name for f in result.warnings if f.rule == "unused"}
+    assert "DB_URL" not in unused
+    # No values leak into any finding.
+    for f in result.findings:
+        assert "postgres" not in f.message
+
+
+def test_infra_no_value_leak(tmp_path):
+    _write(tmp_path, ".env", "SECRET_TOKEN=s0m3-l0ng-r4nd0m-value\n")
+    _write(
+        tmp_path,
+        "compose.yaml",
+        "services:\n  a:\n    environment:\n      X: ${SECRET_TOKEN}\n",
+    )
+    result = scan(tmp_path)
+    for f in result.findings:
+        assert "s0m3" not in f.message
+
+
 def test_diff_and_sync(tmp_path):
     from envdoctor.scanner import diff_labels, sync_labels
 
