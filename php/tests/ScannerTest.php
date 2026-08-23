@@ -170,6 +170,29 @@ check($shapeOk, 'each JSON object has exactly the required keys');
 check(!str_contains($jsonStr, 'supersecretvalue') && !str_contains($jsonStr, 'changeme'), 'no value strings leak into JSON');
 
 
+// 10) Docker Compose / GitHub Actions / Kubernetes source scanning
+$dir = sys_get_temp_dir() . '/envd_php_' . uniqid();
+mkdir($dir);
+file_put_contents("$dir/.env", "DB_URL=postgres://localhost/db\n");
+file_put_contents("$dir/docker-compose.yml", "services:\n  web:\n    environment:\n      SECRET: \${COMPOSE_SECRET}\n      DATABASE: \${DB_URL}\n");
+mkdir("$dir/.github", 0777, true);
+mkdir("$dir/.github/workflows", 0777, true);
+file_put_contents("$dir/.github/workflows/ci.yml", "jobs:\n  deploy:\n    steps:\n      - env:\n          KEY: \${{ secrets.DEPLOY_KEY }}\n          REGION: \${{ vars.REGION }}\n");
+file_put_contents("$dir/deployment.yaml", "apiVersion: apps/v1\nkind: Deployment\nspec:\n  value: \${K8S_VAR}\n");
+$findings = Scanner::scan($dir);
+$undef = array_values(array_filter($findings, fn($f) => $f->rule === 'undefined-in-source'));
+$undefNames = array_map(fn($f) => $f->name, $undef);
+check(in_array('COMPOSE_SECRET', $undefNames, true), 'COMPOSE_SECRET referenced from compose');
+check(in_array('DEPLOY_KEY', $undefNames, true), 'DEPLOY_KEY referenced from actions');
+check(in_array('REGION', $undefNames, true), 'REGION referenced from actions vars');
+check(in_array('K8S_VAR', $undefNames, true), 'K8S_VAR referenced from k8s manifest');
+$msgOk = array_reduce($undef, fn($c, $f) => $c && $f->message === 'referenced but not defined in any environment file', true);
+check($msgOk, 'undefined-in-source uses new message');
+$dbUnused = array_filter($findings, fn($f) => $f->rule === 'unused' && $f->name === 'DB_URL');
+check(count($dbUnused) === 0, 'DB_URL referenced by compose → not unused');
+$jsonStr = Scanner::toJsonArray($findings);
+check(!str_contains($jsonStr, 'postgres://localhost/db'), 'no infra values leak into JSON');
+
 // diff + sync subcommands
 $dir2 = sys_get_temp_dir() . '/envd_php_sub_' . uniqid();
 mkdir($dir2);

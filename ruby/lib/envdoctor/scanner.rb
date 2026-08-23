@@ -149,6 +149,63 @@ module Envdoctor
       end.sort
     end
 
+    COMPOSE_RE = /\A(docker-)?compose([.-].*)?\.ya?ml\z/i.freeze
+
+    def skip_infra_path?(path)
+      path.split(File::SEPARATOR).any? { |part| %w[.git vendor node_modules target].include?(part) }
+    end
+
+    # Walk the project and classify infra YAML files. Returns [[path, kind], ...]
+    # where kind is one of :compose, :actions, :k8s.
+    def discover_infra_files(root)
+      out = []
+      Dir.glob(File.join(root, "**", "*"), File::FNM_DOTMATCH).each do |path|
+        next unless File.file?(path)
+        next if skip_infra_path?(path)
+
+        base = File.basename(path)
+        segments = path.split(File::SEPARATOR)
+        if base.match?(COMPOSE_RE)
+          out << [path, :compose]
+        elsif base =~ /\.ya?ml\z/i &&
+              segments.each_cons(2).any? { |a, b| a == ".github" && b == "workflows" }
+          out << [path, :actions]
+        elsif base =~ /\.ya?ml\z/i
+          content = File.read(path)
+          out << [path, :k8s] if content.match?(/^apiVersion:/m) && content.match?(/^kind:/m)
+        end
+      end
+      out.sort_by(&:first)
+    end
+
+    INTERP_PATTERNS = [
+      /\$\{([A-Za-z_][A-Za-z0-9_]*)/,
+      /\$([A-Za-z_][A-Za-z0-9_]*)/
+    ].freeze
+
+    ACTIONS_CONTEXT_RE = /\b(?:secrets|vars|env)\.([A-Za-z_][A-Za-z0-9_]*)/.freeze
+
+    # Extract used variable NAMES (with origin) from an infra YAML file. First
+    # removes escaped `$$` (two spaces, offsets preserved), then scans for
+    # interpolation and, for GitHub Actions, the secrets/vars/env contexts.
+    def scan_infra(path, content, kind)
+      text = content.gsub("$$", "  ")
+      used = {}
+      patterns = INTERP_PATTERNS.dup
+      patterns << ACTIONS_CONTEXT_RE if kind == :actions
+      patterns.each do |re|
+        text.to_enum(:scan, re).each do
+          match = Regexp.last_match
+          name = match[1]
+          next if used.key?(name)
+
+          line = text[0...match.begin(0)].count("\n") + 1
+          used[name] = Origin.new(path, line)
+        end
+      end
+      used
+    end
+
     # Map each environment label to the set of variable names defined in it.
     def defined_by_label(root)
       labels = {}
@@ -217,6 +274,11 @@ module Envdoctor
       discover_source_files(root).each do |f|
         scan_source(relative(root, f), File.read(f)).each { |k, v| used[k] ||= v }
       end
+      # Infra sources (Docker Compose / GitHub Actions / Kubernetes) contribute
+      # additional used names; first origin wins.
+      discover_infra_files(root).each do |f, kind|
+        scan_infra(relative(root, f), File.read(f), kind).each { |k, v| used[k] ||= v }
+      end
 
       errors = []
       warnings = []
@@ -226,7 +288,7 @@ module Envdoctor
         next if defined.key?(name)
 
         errors << Finding.new("undefined-in-source", "error", name,
-                              "used in source code but not defined in any environment file",
+                              "referenced but not defined in any environment file",
                               used[name])
       end
 

@@ -20,11 +20,15 @@ vendor/bin/envdoctor scan --json         # emit findings as a JSON array (values
 ## What it detects
 
 Reconciles variables **used** in PHP source (`getenv("X")`, `$_ENV["X"]`,
-`$_SERVER["X"]`) against those **defined** in `.env` files:
+`$_SERVER["X"]`) against those **defined** in `.env` files. Interpolated
+references in **Docker Compose** (`${VAR}`), **GitHub Actions** workflows
+(`${{ secrets.X }}`, `${{ vars.X }}`, `${{ env.X }}`) and **Kubernetes**
+manifests (`${VAR}`) also count as usage, so those files feed the same
+missing/undefined and unused checks:
 
 | Rule | Severity | Meaning |
 |------|----------|---------|
-| `undefined-in-source` | error | Used in code but not defined in any `.env` file |
+| `undefined-in-source` | error | Referenced (in source or infra files) but not defined in any `.env` file |
 | `duplicates` | error | Same key defined 2+ times in a single `.env` file |
 | `public-prefix` | error | Secret-looking variable exposed to client bundles via a public prefix (`NEXT_PUBLIC_`, `VITE_`, `REACT_APP_`, …) |
 | `type-mismatch` | error | Variable's inferred value type differs across environments (e.g. integer vs string) |
