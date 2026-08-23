@@ -2,6 +2,7 @@
 
 require "minitest/autorun"
 require "tmpdir"
+require "fileutils"
 require_relative "../lib/envdoctor/scanner"
 
 class ScannerTest < Minitest::Test
@@ -153,6 +154,52 @@ class ScannerTest < Minitest::Test
       refute_includes json, "changeme"
     end
   end
+  def test_scans_compose_actions_and_kubernetes
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, ".env"), "DB_URL=postgres://localhost/db\n")
+      File.write(File.join(dir, "docker-compose.yml"), <<~YAML)
+        services:
+          web:
+            environment:
+              SECRET: ${COMPOSE_SECRET}
+              DATABASE: ${DB_URL}
+      YAML
+      wf = File.join(dir, ".github", "workflows")
+      FileUtils.mkdir_p(wf)
+      File.write(File.join(wf, "ci.yml"), <<~YAML)
+        jobs:
+          deploy:
+            steps:
+              - run: deploy
+                env:
+                  KEY: ${{ secrets.DEPLOY_KEY }}
+                  REGION: ${{ vars.REGION }}
+      YAML
+      File.write(File.join(dir, "deployment.yaml"), <<~YAML)
+        apiVersion: apps/v1
+        kind: Deployment
+        spec:
+          value: ${K8S_VAR}
+      YAML
+
+      findings = Envdoctor::Scanner.scan(dir)
+      undef_found = findings.select { |f| f.rule == "undefined-in-source" }
+      undef_names = undef_found.map(&:name)
+      assert_includes undef_names, "COMPOSE_SECRET"
+      assert_includes undef_names, "DEPLOY_KEY"
+      assert_includes undef_names, "REGION"
+      assert_includes undef_names, "K8S_VAR"
+      undef_found.each do |f|
+        assert_equal "referenced but not defined in any environment file", f.message
+      end
+      # DB_URL referenced by compose interpolation → not unused.
+      refute(findings.any? { |f| f.rule == "unused" && f.name == "DB_URL" })
+      # values never leak.
+      json = Envdoctor::Scanner.to_json_array(findings)
+      refute_includes json, "postgres://localhost/db"
+    end
+  end
+
   def test_diff_and_sync
     Dir.mktmpdir do |dir|
       File.write(File.join(dir, ".env"), "A=1\nB=2\n")
