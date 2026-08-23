@@ -539,6 +539,16 @@ release history and [SECURITY.md](./SECURITY.md) to report a vulnerability.
 
 </details>
 
+## Support
+
+envdoctor is free and MIT-licensed. If it's saved you from a broken deploy,
+you can support ongoing development:
+
+- ❤️ [GitHub Sponsors](https://github.com/sponsors/arun-skg)
+- ☕ [Buy Me a Coffee](https://buymeacoffee.com/arunskg)
+
+Starring the repo and telling a teammate helps just as much.
+
 ## License
 
 [MIT](./LICENSE)
