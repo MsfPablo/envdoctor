@@ -45,7 +45,8 @@ describe("public-prefix detector", () => {
       const model = buildModel([{ path: "/p/.env", content: `${name}=abc\n` }]);
       const findings = publicPrefixDetector.detect(buildIndex(model));
       expect(findings.map((f) => f.variable)).toEqual([name]);
-      expect(findings[0].severity).toBe("error");
+      const [finding] = findings;
+      expect(finding?.severity).toBe("error");
     });
 
     it("reports the longest matching prefix, not a shorter one it contains", () => {
@@ -53,8 +54,8 @@ describe("public-prefix detector", () => {
         { path: "/p/.env", content: "NUXT_PUBLIC_API_SECRET=abc\n" },
       ]);
       const [finding] = publicPrefixDetector.detect(buildIndex(model));
-      expect(finding.message).toContain('"NUXT_PUBLIC_"');
-      expect(finding.message).not.toContain('"PUBLIC_"; ');
+      expect(finding?.message).toContain('"NUXT_PUBLIC_"');
+      expect(finding?.message).not.toContain('"PUBLIC_"; ');
     });
 
     it("does not flag non-secret names behind the same prefixes", () => {
