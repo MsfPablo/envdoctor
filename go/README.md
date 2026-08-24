@@ -1,6 +1,6 @@
 # envdoctor (Go)
 
-[![Go module](https://img.shields.io/badge/Go-v0.1.0-00ADD8.svg?logo=go&logoColor=white)](https://pkg.go.dev/github.com/arun-skg/envdoctor/go)
+[![Go module](https://img.shields.io/github/v/tag/arun-skg/envdoctor?filter=go/*&label=Go&color=00ADD8&logo=go&logoColor=white)](https://pkg.go.dev/github.com/arun-skg/envdoctor/go)
 
 Native Go implementation of [envdoctor](https://github.com/arun-skg/envdoctor) —
 a local-first environment-variable consistency checker, installable as a Go

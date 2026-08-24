@@ -1,6 +1,6 @@
 # envdoctor (Java)
 
-[![Maven Central](https://img.shields.io/badge/Maven%20Central-0.1.0-C71A36.svg?logo=apachemaven&logoColor=white)](https://central.sonatype.com/artifact/io.github.arun-skg/envdoctor)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.arun-skg/envdoctor?label=Maven%20Central&color=C71A36&logo=apachemaven&logoColor=white)](https://central.sonatype.com/artifact/io.github.arun-skg/envdoctor)
 
 Native Java port of [envdoctor](https://github.com/arun-skg/envdoctor) — a
 local-first environment-variable consistency checker, built with Maven and
