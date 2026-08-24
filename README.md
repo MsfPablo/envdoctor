@@ -20,8 +20,8 @@
 [![PyPI](https://img.shields.io/pypi/v/arun-envdoctor.svg?label=PyPI&logo=pypi&logoColor=white)](https://pypi.org/project/arun-envdoctor/)
 [![Gem](https://img.shields.io/gem/v/envdoctor.svg?label=RubyGems&logo=rubygems&logoColor=white)](https://rubygems.org/gems/envdoctor)
 [![Packagist](https://img.shields.io/packagist/v/arun-skg/envdoctor.svg?label=Packagist&logo=packagist&logoColor=white)](https://packagist.org/packages/arun-skg/envdoctor)
-[![Maven Central](https://img.shields.io/badge/Maven%20Central-0.1.0-C71A36.svg?logo=apachemaven&logoColor=white)](https://central.sonatype.com/artifact/io.github.arun-skg/envdoctor)
-[![Go module](https://img.shields.io/badge/Go-v0.1.0-00ADD8.svg?logo=go&logoColor=white)](https://pkg.go.dev/github.com/arun-skg/envdoctor/go)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.arun-skg/envdoctor?label=Maven%20Central&color=C71A36&logo=apachemaven&logoColor=white)](https://central.sonatype.com/artifact/io.github.arun-skg/envdoctor)
+[![Go module](https://img.shields.io/github/v/tag/arun-skg/envdoctor?filter=go/*&label=Go&color=00ADD8&logo=go&logoColor=white)](https://pkg.go.dev/github.com/arun-skg/envdoctor/go)
 
 **The ESLint for environment variables.** envdoctor audits every place your config lives — `.env` files, source code, Docker Compose, Kubernetes manifests, and GitHub Actions — and fails your build *before* a missing key, a dead variable, or a `NEXT_PUBLIC_` secret leak fails your deploy.
 
