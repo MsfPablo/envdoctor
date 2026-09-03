@@ -49,7 +49,12 @@ describe("public-prefix detector", () => {
       expect(finding?.severity).toBe("error");
     });
 
-    it("reports the longest matching prefix, not a shorter one it contains", () => {
+    // The detector matches the first prefix in array order whose value the name
+    // starts with; because `startsWith` is anchored, a shorter prefix like
+    // `PUBLIC_` never shadows a `NUXT_`-prefixed name. (Prefixes must stay
+    // ordered longest-first if any ever become a true leading substring of
+    // another — see PUBLIC_PREFIXES in src/detectors/public-prefix.ts.)
+    it("matches the anchored prefix and ignores unrelated ones", () => {
       const model = buildModel([
         { path: "/p/.env", content: "NUXT_PUBLIC_API_SECRET=abc\n" },
       ]);
